@@ -111,11 +111,14 @@ class GitLog:
         proven by `tests/test_gitevidence.py`, not by a hit on the real
         doc — see `cli.py`'s reported counts."""
         for c in self.commits:
-            m = _IDEA_ID_TRAILER_RE.search(c.full_text)
-            if m and m.group(1) == idea_id:
-                status_m = _IDEA_STATUS_TRAILER_RE.search(c.full_text)
-                status = status_m.group(1).lower() if status_m else "landed"
-                return c, status
+            # finditer, not search: one commit may land several ideas and
+            # carry a trailer for each. `search` would see only the first,
+            # silently costing every later id its highest-confidence evidence.
+            for m in _IDEA_ID_TRAILER_RE.finditer(c.full_text):
+                if m.group(1) == idea_id:
+                    status_m = _IDEA_STATUS_TRAILER_RE.search(c.full_text)
+                    status = status_m.group(1).lower() if status_m else "landed"
+                    return c, status
         return None
 
     def find_merged_pr(self, pr_num: int) -> Commit | None:
@@ -135,3 +138,25 @@ class GitLog:
             if m and int(m.group(1)) == pr_num:
                 return c
         return None
+
+    def all_idea_trailers(self) -> list[tuple[Commit, str, str]]:
+        """Every `Idea-Id` trailer in the loaded history, as
+        (commit, idea_id, status) in `git log` order.
+
+        `find_idea_trailer` answers "does THIS item have evidence?" and is the
+        classifier's question. This answers the inverse — "what do the commits
+        claim?" — which is what `verify.py` needs in order to catch a trailer
+        naming an item the doc does not contain. A typo'd or stale id is worse
+        than a missing one: the classifier will assert LANDED from it, and
+        nothing else in the rule stack can tell a real join key from a
+        plausible-looking dead one."""
+        out: list[tuple[Commit, str, str]] = []
+        for c in self.commits:
+            status_m = _IDEA_STATUS_TRAILER_RE.search(c.full_text)
+            # `Idea-Status` is commit-level: a commit that lands several ideas
+            # partially is saying so about all of them. Splitting status per id
+            # would need a richer trailer shape than the convention defines.
+            status = status_m.group(1).lower() if status_m else "landed"
+            for m in _IDEA_ID_TRAILER_RE.finditer(c.full_text):
+                out.append((c, m.group(1), status))
+        return out

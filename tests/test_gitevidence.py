@@ -84,3 +84,35 @@ def test_unavailable_on_non_git_directory(tmp_path):
     gitlog = GitLog.load(str(not_a_repo))
     assert gitlog.available is False
     assert gitlog.error
+
+
+def test_all_idea_trailers_reports_what_the_commits_claim(repo_factory):
+    """The inverse of find_idea_trailer: not "does this item have evidence?"
+    but "what do the commits say?" — which is what catches a dangling key."""
+    repo = repo_factory([
+        "chore: no trailer here",
+        "feat: a\n\nIdea-Id: willow-ideas-001",
+        "feat: b\n\nIdea-Id: willow-ideas-002\nIdea-Status: partial",
+    ])
+    found = GitLog.load(str(repo)).all_idea_trailers()
+    assert {(ident, status) for _, ident, status in found} == {
+        ("willow-ideas-001", "landed"),
+        ("willow-ideas-002", "partial"),
+    }
+
+
+def test_all_idea_trailers_is_empty_on_a_history_predating_the_convention(repo_factory):
+    assert GitLog.load(str(repo_factory(["chore: scaffold"]))).all_idea_trailers() == []
+
+
+def test_a_commit_landing_several_ideas_registers_every_trailer(repo_factory):
+    """One commit, several trailers — `search` would have seen only the first
+    and silently cost every later id its strongest evidence."""
+    repo = repo_factory([
+        "feat: the write-side loop\n\n"
+        "Idea-Id: willow-ideas-001\nIdea-Id: willow-ideas-002\nIdea-Id: willow-ideas-003"
+    ])
+    log = GitLog.load(str(repo))
+    assert len(log.all_idea_trailers()) == 3
+    for n in ("001", "002", "003"):
+        assert log.find_idea_trailer(f"willow-ideas-{n}") is not None

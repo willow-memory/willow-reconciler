@@ -28,6 +28,33 @@ is itself why "format predicts landing." The fix cannot look backward — it
 starts writing the key now, and this reconciler grows useful as trailers
 accumulate.
 
+## Tooling (you should not be typing these by hand)
+
+    reconciler id --repo <repo> --doc <doc> --num 42      # print the trailer line
+    reconciler id --repo <repo> --doc <doc> --grep "text"  # ... or find it by text
+    reconciler install-hook --repo <repo>                  # write it automatically
+    reconciler verify --repo <repo> --doc <doc>            # check they all resolve
+
+`install-hook` adds a `prepare-commit-msg` hook that derives the trailer from
+a branch name that names an idea number (`idea-42`, `ideas-042`,
+`feature/idea_42-thing`), and a `commit-msg` hook that rejects a malformed
+`Idea-Id` or `Idea-Status` line. Neither hook can invent a link: the first
+fires only when the branch already carries the number, and it never overwrites
+a trailer written by hand.
+
+A commit may carry several `Idea-Id` trailers when it lands several ideas.
+`Idea-Status` is commit-level, so a commit saying `partial` says it about
+every id it names.
+
+## A wrong id is worse than no id
+
+An `Idea-Id` that resolves to nothing is not a harmless typo. Rule 2a asserts
+LANDED from a trailer ahead of every other inferred signal, and nothing else in
+the rule stack can distinguish a real join key from a plausible-looking dead
+one — so a dangling trailer is a silent, permanent, confident wrong answer.
+That is why the id shape is fixed (`willow-ideas-NNN`, three digits), why the
+commit-msg hook rejects anything else, and why `reconciler verify` runs in CI.
+
 ## Nothing to backfill on the doc side
 
 The doc-side id is *derived* by `reconciler/ids.py` from the entry's position

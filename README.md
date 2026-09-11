@@ -28,7 +28,7 @@ Requires Python 3.10+.
 
 ## Usage
 
-The CLI has one verb, `run`:
+The reconcile verb is `run`:
 
 ```sh
 reconciler run --repo willow-mcp --doc docs/ideas.md
@@ -50,6 +50,33 @@ Flags (see `reconciler/cli.py`):
 Every failure is a clear `error:` line on stderr with a non-zero exit — no
 tracebacks.
 
+### Writing the join key
+
+The reconciler is only as good as the `Idea-Id` trailers in the history it
+reads (see [`CONVENTION.md`](CONVENTION.md)), so three verbs exist to make
+writing one the easy path rather than a thing you must remember:
+
+```sh
+# the exact trailer line for an item, by number or by text
+reconciler id --repo willow-mcp --doc docs/ideas.md --num 42
+reconciler id --repo willow-mcp --doc docs/ideas.md --grep "cross-repo trailer"
+
+# install hooks that add the trailer from the branch name and reject a
+# malformed one at commit time
+reconciler install-hook --repo willow-mcp
+
+# check every trailer in the history resolves to a real item (a CI gate)
+reconciler verify --repo willow-mcp --doc docs/ideas.md
+```
+
+`id` prints the trailer and nothing else on stdout, so it pipes straight into
+a commit message; which item it resolved to goes to stderr. It refuses an
+ambiguous `--grep` rather than guessing — writing the wrong id is worse than
+writing none, because a dangling trailer still reads as the strongest evidence
+the classifier has, and `verify` is what catches that. `install-hook` is the
+only verb that writes anything outside this repo; `run` and `verify` still
+only ever call `git log`.
+
 ## Modules
 
 - **parse** — turn a doc's text into numbered `Item` records; near-miss lines
@@ -65,7 +92,15 @@ tracebacks.
   / `reading` result-shape, keeping the explicit/inferred split visible.
 - **validate** — Slice 0's acceptance test as a library function: the trivial
   echo check plus the real hold-out score.
-- **cli** — `reconciler run --repo <name> --doc <path>`.
+- **emit** — resolve which item a commit is landing (by number or text) and
+  render its trailer line. A doc-side convenience only: it never reaches
+  `classify`, so a loose match costs an ambiguity error, never a false verdict.
+- **verify** — resolve every `Idea-Id` trailer in the history against the doc
+  and report the ones that name nothing, so a typo'd or stale join key fails
+  loudly instead of asserting LANDED forever.
+- **hooks** — the `prepare-commit-msg` / `commit-msg` shell hooks and their
+  installer; the one place this tool writes outside its own repo.
+- **cli** — `run`, `id`, `verify`, `install-hook`.
 
 ## Why prospective, not retroactive
 
