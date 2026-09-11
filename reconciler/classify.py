@@ -21,6 +21,13 @@ Rule order (first match wins):
      exactly that: absence of evidence, not evidence of absence.
      `Verdict.evidence` says so explicitly.
 
+Every `Verdict` carries `rule`, the stable identifier of whichever branch
+above actually fired ("1" / "2a" / "2b" / "3", matching this numbering
+exactly — see `RULE_EXPLICIT_TAG` etc. below). This is additive reporting
+only: it does not change what any branch decides, only names which one ran,
+so a wrong verdict can be debugged from the emitted ledger without reading
+this file.
+
 REDESIGN (post Opus-audit rework, Slice 0): the previous version of rule 2
 also matched a bare backtick-quoted identifier against ANY commit mention,
 and rule 2b matched ANY `#\\d+` substring in the item text, not just an
@@ -84,6 +91,16 @@ def _first_tag_match(text: str, lead_re, clause_re):
 _VALID_STATUSES = (LANDED, PARTIAL, NOT_STARTED)
 
 
+#: Stable rule identifiers, matching this module's own docstring numbering
+#: exactly (1 / 2a / 2b / 3). If that numbering ever changes, update the
+#: docstring in the same commit — these strings are load-bearing output, not
+#: an internal label, once they reach the emitted ledger.
+RULE_EXPLICIT_TAG = "1"
+RULE_IDEA_ID_TRAILER = "2a"
+RULE_MERGED_PR_MENTION = "2b"
+RULE_ABSTAIN = "3"
+
+
 @dataclass(frozen=True)
 class Verdict:
     idea_id: str
@@ -91,6 +108,8 @@ class Verdict:
     status: str            # LANDED | PARTIAL | NOT_STARTED
     evidence: str           # human-readable — what was found, or that nothing was
     evidence_kind: str       # EXPLICIT | INFERRED | NONE_KIND
+    rule: str                # which rule fired: "1" | "2a" | "2b" | "3" — see
+                              # this module's docstring for the numbered stack
 
 
 def explicit_tag_span(text: str):
@@ -120,8 +139,8 @@ def _explicit_tag(text: str) -> tuple[str, str] | None:
     return None
 
 
-def _inferred_tier(idea_id: str, text: str, gitlog: GitLog) -> tuple[str, str] | None:
-    """Returns (status, evidence_text), or None if no REAL evidence was
+def _inferred_tier(idea_id: str, text: str, gitlog: GitLog) -> tuple[str, str, str] | None:
+    """Returns (status, evidence_text, rule), or None if no REAL evidence was
     found. `status` comes from the evidence itself (see rule 2a/2b in the
     module docstring) — this function does not hardcode a status, it reports
     whatever the resolved evidence actually supports, which is how the
@@ -134,14 +153,14 @@ def _inferred_tier(idea_id: str, text: str, gitlog: GitLog) -> tuple[str, str] |
         c, status = hit
         assert status in _VALID_STATUSES
         return status, (f"commit {c.sha[:10]} carries trailer 'Idea-Id: {idea_id}' "
-                        f"(status={status}): {c.subject!r}")
+                        f"(status={status}): {c.subject!r}"), RULE_IDEA_ID_TRAILER
 
     for m in PR_MENTION_RE.finditer(text):
         pr_num = int(m.group(1))
         c = gitlog.find_merged_pr(pr_num)
         if c is not None:
             return LANDED, (f"item names PR #{pr_num}; git history shows it merged "
-                            f"in commit {c.sha[:10]}: {c.subject!r}")
+                            f"in commit {c.sha[:10]}: {c.subject!r}"), RULE_MERGED_PR_MENTION
     return None
 
 
@@ -150,13 +169,14 @@ def classify_item(idea_id: str, num: int, text: str, gitlog: GitLog) -> Verdict:
     if explicit is not None:
         status, evidence = explicit
         return Verdict(idea_id=idea_id, num=num, status=status,
-                       evidence=evidence, evidence_kind=EXPLICIT)
+                       evidence=evidence, evidence_kind=EXPLICIT,
+                       rule=RULE_EXPLICIT_TAG)
 
     inferred = _inferred_tier(idea_id, text, gitlog)
     if inferred is not None:
-        status, evidence = inferred
+        status, evidence, rule = inferred
         return Verdict(idea_id=idea_id, num=num, status=status,
-                       evidence=evidence, evidence_kind=INFERRED)
+                       evidence=evidence, evidence_kind=INFERRED, rule=rule)
 
     reason = ("no evidence found (no legend tag, no Idea-Id trailer, no PR named in "
               "the item text that git history shows as merged) — this means no "
@@ -164,4 +184,4 @@ def classify_item(idea_id: str, num: int, text: str, gitlog: GitLog) -> Verdict:
     if not gitlog.available:
         reason += f"; git history was unavailable ({gitlog.error})"
     return Verdict(idea_id=idea_id, num=num, status=NOT_STARTED,
-                   evidence=reason, evidence_kind=NONE_KIND)
+                   evidence=reason, evidence_kind=NONE_KIND, rule=RULE_ABSTAIN)

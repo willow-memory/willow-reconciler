@@ -25,6 +25,8 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 
+from .failure_classes import classify as _classify_failure
+
 _SEP = "\x01"        # field separator inside one commit's record
 _END = "\x02"        # record separator between commits
 
@@ -121,6 +123,11 @@ class GitLog:
     repo_path: str
     commits: tuple[Commit, ...] = field(default_factory=tuple)
     available: bool = True
+    # A closed-vocabulary phrase from `failure_classes.FAILURE_CLASSES`, never
+    # git's raw stderr or a caught exception's raw text — this field is
+    # spliced into a verdict's reason (classify.py) and into verify.py's
+    # headline, both of which are emitted, so it must never carry a path or
+    # username git's own output happens to include.
     error: str = ""
 
     @classmethod
@@ -144,7 +151,11 @@ class GitLog:
                 capture_output=True, text=True, timeout=60,
             )
         except (OSError, subprocess.SubprocessError) as e:
-            return cls(repo_path=repo_path, available=False, error=str(e))
+            # `str(e)` here can carry an absolute path or, for a
+            # `TimeoutExpired`, the full argv this tool invoked — read it to
+            # classify, never store it: `GitLog.error` is spliced into a
+            # verdict's reason and emitted (see failure_classes.py).
+            return cls(repo_path=repo_path, available=False, error=_classify_failure(str(e)))
         if proc.returncode != 0:
             # A freshly-`git init`ed repo has an unborn HEAD, so `git log`
             # exits non-zero — but an empty history is a legitimate, usable
@@ -154,8 +165,12 @@ class GitLog:
             # only, tells "not a git repo" apart from "git repo, no commits".
             if cls._is_git_repo(repo_path):
                 return cls(repo_path=repo_path, commits=(), available=True)
+            # `proc.stderr` is git's own text and can carry an absolute path
+            # (`fatal: cannot change to '/home/<user>/work/<client>/repo'`) —
+            # read it to classify, never store it verbatim (see
+            # failure_classes.py's module docstring for why).
             return cls(repo_path=repo_path, available=False,
-                       error=proc.stderr.strip() or f"git log exited {proc.returncode}")
+                       error=_classify_failure(proc.stderr))
         commits = []
         for rec in proc.stdout.split(_END):
             rec = rec.strip("\n")

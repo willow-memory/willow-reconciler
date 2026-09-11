@@ -80,6 +80,7 @@ def build_ledger(doc: str, repo: str, items_total: int, dropped: int,
                 "status": v.status,
                 "evidence": v.evidence,
                 "evidence_kind": v.evidence_kind,
+                "rule": v.rule,
             }
             for v in verdicts
         ],
