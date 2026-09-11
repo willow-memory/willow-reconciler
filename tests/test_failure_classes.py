@@ -12,7 +12,8 @@ worth its cost: **no substring of the input can reach the output.**
 """
 from __future__ import annotations
 
-from reconciler.failure_classes import FAILURE_CLASSES, UNKNOWN, classify, describe
+from reconciler.failure_classes import (FAILURE_CLASSES, FILE_FAILURE_CLASSES, UNKNOWN,
+                                          classify, classify_file, describe)
 
 # A representative git fatal message naming an absolute path that reveals the
 # operating user and a sibling (client) repo's name.
@@ -121,3 +122,41 @@ def test_the_stdlib_missing_executable_message_is_still_classified():
 def test_permission_denied_is_unaffected_by_the_reorder():
     assert classify("fatal: cannot change to '/x': Permission denied") == \
         "permission denied accessing the repository"
+
+
+# ── file-read vocabulary ─────────────────────────────────────────────────────
+# `cli.py`'s `--doc` read echoed the OSError text, which carries the RESOLVED
+# absolute path even though the caller only ever types a sibling name — so it
+# named the operating user and the fleet layout. Same class as the git-stderr
+# leak, different door.
+
+def test_the_resolved_path_never_reaches_the_output():
+    hostile = "[Errno 2] No such file or directory: '/home/sean-campbell/work/acme/README.md'"
+    out = classify_file(hostile)
+    for token in ("/home/", "sean-campbell", "acme", "Errno", "README.md"):
+        assert token not in out
+    assert out == "no such file"
+
+
+def test_real_oserror_shapes_classify():
+    cases = [
+        ("[Errno 2] No such file or directory: '/x/y.md'", "no such file"),
+        ("[Errno 13] Permission denied: '/x/y.md'", "permission denied"),
+        ("[Errno 21] Is a directory: '/x'", "the path is a directory"),
+        ("'utf-8' codec can't decode byte 0xff in position 0: invalid start byte",
+         "the file is not valid UTF-8"),
+        ("something nobody has a marker for", "unknown failure"),
+        ("", "unknown failure"),
+        (None, "unknown failure"),
+    ]
+    for text, expected in cases:
+        assert classify_file(text) == expected, text
+        assert classify_file(text) in FILE_FAILURE_CLASSES
+
+
+def test_git_and_file_vocabularies_stay_separate():
+    # a doc-read permission error must NOT be reported in the git vocabulary's
+    # repository-specific wording
+    text = "[Errno 13] Permission denied: '/x/y.md'"
+    assert classify_file(text) == "permission denied"
+    assert classify(text) == "permission denied accessing the repository"

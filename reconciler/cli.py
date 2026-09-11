@@ -31,6 +31,7 @@ from . import validate as validatemod
 from .benchmark import benchmark
 from .classify import classify_item
 from .emit import VALID_STATUSES, find_items, trailer_block
+from .failure_classes import classify_file
 from .gitevidence import GitLog
 from .hooks import install_hooks
 from .ids import idea_id
@@ -67,7 +68,12 @@ def _load(repo: str, doc: str, fleet_root: Path | None):
     try:
         text = doc_path.read_text(encoding="utf-8")
     except OSError as e:
-        print(f"error: could not read --doc {doc} under {repo}: {e}", file=sys.stderr)
+        # `doc` and `repo` are echoed because the caller typed them; the
+        # OSError's own text is NOT, because it carries the RESOLVED absolute
+        # path (so the operating user and the fleet layout) that the caller
+        # never typed. See reconciler/failure_classes.py.
+        print(f"error: could not read --doc {doc} under {repo}: "
+              f"{classify_file(str(e))}", file=sys.stderr)
         return 2
 
     items, dropped = parse_doc(text)

@@ -107,3 +107,43 @@ def describe(operation: str, foreign_text: str | None) -> str:
     a value read from the environment, a path, or git's own output.
     """
     return f"{operation} failed: {classify(foreign_text)}"
+
+#: A SEPARATE vocabulary for reading a file, deliberately not folded into the
+#: git table above. The git phrases are context-specific ("permission denied
+#: accessing the repository"), and reusing them for a doc read would report a
+#: correct class in the wrong words — the same misleading-but-confident failure
+#: the ordering trap above exists to prevent. Two small honest vocabularies beat
+#: one that has to be vague enough to cover both.
+FILE_FAILURE_CLASSES: frozenset[str] = frozenset({
+    "no such file",
+    "permission denied",
+    "the path is a directory",
+    "the file is not valid UTF-8",
+    "unknown failure",
+})
+
+_FILE_MARKERS: tuple[tuple[str, str], ...] = (
+    ("is a directory", "the path is a directory"),
+    ("permission denied", "permission denied"),
+    ("no such file or directory", "no such file"),
+    ("codec can't decode", "the file is not valid UTF-8"),
+    ("invalid start byte", "the file is not valid UTF-8"),
+)
+
+
+def classify_file(foreign_text: str | None) -> str:
+    """A member of `FILE_FAILURE_CLASSES` describing a file-read failure.
+
+    Same contract as `classify`: the input is read and never echoed. An OSError's
+    `str()` carries the RESOLVED absolute path (`[Errno 2] No such file or
+    directory: '/home/<user>/<sibling>/README.md'`), which names the operating
+    user and the fleet layout even though the caller only ever typed a sibling
+    name — so the text is classified, never interpolated.
+    """
+    if not foreign_text:
+        return UNKNOWN
+    haystack = foreign_text.lower()
+    for marker, klass in _FILE_MARKERS:
+        if marker in haystack:
+            return klass
+    return UNKNOWN
