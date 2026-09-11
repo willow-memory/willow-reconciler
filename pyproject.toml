@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+# distribution name carries the fleet prefix; import package and console
+# script both stay `reconciler` — same three-names split as corpus-lens
+# (see corpus-lens/pyproject.toml).
+name = "willow-reconciler"
+version = "0.1.0"
+description = "Deterministic idea-to-landing reconciler: reads the fleet's own records and reports how much of what was proposed has actually landed."
+license = { text = "Apache-2.0" }
+authors = [{ name = "Sean Campbell" }]
+requires-python = ">=3.10"
+dependencies = []
+keywords = ["reconciler", "fleet", "process-analysis", "local-first", "deterministic"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Environment :: Console",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+reconciler = "reconciler.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["reconciler"]
