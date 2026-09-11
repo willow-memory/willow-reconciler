@@ -30,7 +30,7 @@ highest-leverage work in the pile.
 2. ✅ **shipped**: folded into `reconciler id --grep` rather than a second verb. Find the item you are actually landing by substring/word match against item text, then emit its trailer. Search is a doc-side convenience, not evidence, so it keeps the classifier's precision rules untouched.
 3. ✅ **shipped**: `reconciler install-hook`. Writes a `prepare-commit-msg` git hook into the target repo that appends an `Idea-Id` trailer when the branch name or commit body names an item, and a `commit-msg` hook that rejects a malformed one. Opt-in, and the only part of this tool that ever writes outside its own repo, so it must be an explicit verb rather than a side effect.
 4. ✅ **shipped**: `reconciler verify`. Resolve every `Idea-Id` trailer in history against the current doc and fail on any that names an item the doc does not contain. A typo'd or stale id is worse than no id: it is a false join key that the classifier will assert LANDED from.
-5. A GitHub Action running idea 4 on every PR, plus a PR comment naming which items the PR's commits claim to land. Turns the convention into something CI enforces rather than something a CONVENTION.md asks for politely. Turns the convention into something CI enforces rather than something a CONVENTION.md asks for politely.
+5. 🟡 **partial**: `.github/workflows/trailers.yml` runs idea 4 on every PR; the PR comment naming which items the commits claim to land is still open. Turns the convention into something CI enforces rather than something a CONVENTION.md asks for politely.
 
 ## B. Evidence tiers that stay deterministic
 
