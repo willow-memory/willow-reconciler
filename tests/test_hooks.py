@@ -144,3 +144,56 @@ def test_a_well_formed_trailer_passes_validation(repo):
     _run(["git", "checkout", "-qb", "main-work"], repo)
     _commit(repo, "a.txt", "feat: y\n\nIdea-Id: willow-ideas-001\nIdea-Status: partial")
     assert "willow-ideas-001" in _last_message(repo)
+
+
+# --- post-write-side audit regressions ------------------------------------
+
+def test_a_branch_naming_two_ideas_gets_no_trailer(repo):
+    """Finding #3: the old greedy sed took the LAST number, so this branch
+    wrote a well-formed trailer for item 7 — a confidently wrong join key
+    `verify` cannot flag, because it resolves. Never guess."""
+    install_hooks(repo)
+    _run(["git", "checkout", "-qb", "idea-42-followup-to-idea-7"], repo)
+    proc = _commit(repo, "a.txt", "feat: land idea 42, mentions idea 7")
+    assert "Idea-Id" not in _last_message(repo)
+    assert "more than one idea number" in proc.stderr
+
+
+def test_an_ambiguous_branch_still_lets_the_commit_through(repo):
+    """Refusing to guess must not block the author — `set -e` plus a bare
+    `[ ... ] && exit 0` would have aborted the commit outright."""
+    install_hooks(repo)
+    _run(["git", "checkout", "-qb", "idea-1-and-idea-2"], repo)
+    proc = _commit(repo, "a.txt", "feat: two ideas")
+    assert proc.returncode == 0
+
+
+def test_a_branch_repeating_one_idea_number_is_not_ambiguous(repo):
+    install_hooks(repo)
+    _run(["git", "checkout", "-qb", "idea-42-rework-of-idea-42"], repo)
+    _commit(repo, "a.txt", "feat: rework")
+    assert "Idea-Id: willow-ideas-042" in _last_message(repo)
+
+
+def test_an_idea_past_999_commits_successfully(repo):
+    """Finding #4: ids.py pads to a MINIMUM of 3 digits precisely so ids stay
+    correct past #999, but the validator capped at exactly 3 — making every
+    item from #1000 on uncommittable through the hooks."""
+    install_hooks(repo)
+    _run(["git", "checkout", "-qb", "idea-1500-big-number"], repo)
+    proc = _commit(repo, "a.txt", "feat: big number")
+    assert proc.returncode == 0
+    assert "Idea-Id: willow-ideas-1500" in _last_message(repo)
+
+
+def test_hooks_are_installed_where_core_hookspath_points(repo):
+    """Finding #6: the install reported success for files git would never run."""
+    _run(["git", "config", "core.hooksPath", "custom-hooks"], repo)
+    result = install_hooks(repo)
+    assert result["ok"] is True
+    assert result["hooks_dir"].endswith("custom-hooks")
+    assert (repo / "custom-hooks" / "commit-msg").exists()
+
+    _run(["git", "checkout", "-qb", "idea-88-hookspath"], repo)
+    _commit(repo, "a.txt", "feat: should get a trailer")
+    assert "Idea-Id: willow-ideas-088" in _last_message(repo)

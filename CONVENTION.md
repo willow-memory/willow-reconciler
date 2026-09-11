@@ -65,7 +65,21 @@ trailers the harness already appends, so it is one more line.
 
 ## What counts as landing evidence
 
-- The `Idea-Id` trailer on a merged commit (primary key).
-- A commit body that says "PR #N" *and* git shows PR #N merged. A bare `#N`,
-  or an idea-number cross-reference like "former #103", is NOT a PR ref — the
-  reconciler rejects it (see tests/).
+- The `Idea-Id` trailer on a commit **reachable from the checkout being
+  reconciled** (primary key). Evidence is scoped to `git log HEAD`, not
+  `git log --all`: a trailer on an abandoned or rejected branch is not a
+  landing, and reading it as one was a false LANDED sourced from the ref scope.
+- A commit body that says "PR #N" *and* git shows PR #N merged **as a real
+  merge commit** (two or more parents, with GitHub's own merge subject). A bare
+  `#N`, or an idea-number cross-reference like "former #103", is NOT a PR ref —
+  the reconciler rejects it (see tests/).
+
+Deliberately NOT evidence: a subject ending `(#N)`. That is GitHub's
+squash-merge title shape, but it is also the ordinary conventional-commit habit
+of naming an issue, and the two are indistinguishable from git alone — it
+asserted LANDED for unrelated commits. Repos that squash-merge should rely on
+the trailer, which is the durable key regardless of merge strategy.
+
+A legend tag in the doc is read as a tag only when it LEADS the item text or
+when its dash-introduced clause NAMES its legend keyword (`shipped` / `partial`).
+An ordinary sentence containing an em-dash and a marker is prose, not a tag.

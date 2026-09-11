@@ -85,7 +85,8 @@ only ever call `git log`.
   number; recomputable from the doc alone, no migration table.
 - **gitevidence** — read-only `git log` evidence for the inferred tier (one
   subprocess per run); asserts LANDED only from an `Idea-Id` trailer or a PR
-  number git shows was actually merged.
+  number git shows was actually merged. Scoped to commits reachable from the
+  checkout's HEAD, so a trailer on an abandoned branch is not a landing.
 - **classify** — the deterministic rule stack: one `classify_item` call, one
   `Verdict` out (explicit legend tag → inferred git evidence → not_started).
 - **ledger** — aggregate verdicts into a per-doc ledger with a `headline` / `n`

@@ -25,6 +25,7 @@ wrote by hand.
 from __future__ import annotations
 
 import stat
+import subprocess
 from pathlib import Path
 
 MARKER = "# installed by `reconciler install-hook` (willow-reconciler)"
@@ -52,11 +53,32 @@ fi
 branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) || exit 0
 [ -n "$branch" ] || exit 0
 
-# Strip leading zeros before printf: a shell printf may read `024` as octal.
-num=$(printf '%s' "$branch" | sed -n 's/.*[Ii]dea[s]*[-_/]0*\\([0-9][0-9]*\\).*/\\1/p')
-[ -n "$num" ] || exit 0
+# Every idea number the branch names. The old single greedy sed took the LAST
+# one, so `idea-42-followup-to-idea-7` wrote a well-formed trailer for item 7 —
+# a confidently wrong, permanent join key that `verify` cannot flag, because it
+# resolves. Two numbers means the branch is ambiguous about what it lands, and
+# guessing is the one thing this convention must never do (`reconciler id`
+# refuses an ambiguous --grep for the same reason).
+nums=$(printf '%s\\n' "$branch" | grep -oi 'idea[s]*[-_/][0-9][0-9]*' \\
+         | grep -o '[0-9][0-9]*$' | sed 's/^0*//' | grep -v '^$' | sort -u)
+count=$(printf '%s' "$nums" | grep -c '^[0-9]' || true)
 
-id=$(printf 'willow-ideas-%03d' "$num")
+# `[ ... ] && exit 0` would be a set -e landmine: when the test is FALSE the
+# list's status is non-zero, set -e fires, and a non-zero prepare-commit-msg
+# aborts the commit. Always the `if` form in a hook.
+if [ "$count" -eq 0 ]; then
+  exit 0
+fi
+if [ "$count" -gt 1 ]; then
+  echo "prepare-commit-msg: branch '$branch' names more than one idea number;" >&2
+  echo "  not guessing. Add the trailer yourself:" >&2
+  echo "  reconciler id --repo R --doc D --num N" >&2
+  exit 0
+fi
+
+# printf sets a MINIMUM width, so an id past 999 keeps its own digits — the
+# fixed 3-wide padding is a floor, exactly as reconciler/ids.py defines it.
+id=$(printf 'willow-ideas-%03d' "$nums")
 
 # interpret-trailers keeps the trailer inside the existing trailer block
 # (alongside Co-Authored-By) rather than starting a new paragraph after it.
@@ -75,11 +97,14 @@ COMMIT_MSG = f"""#!/bin/sh
 set -e
 msg_file="$1"
 
-bad=$(grep -i '^Idea-Id:' "$msg_file" | grep -cv '^Idea-Id: willow-ideas-[0-9][0-9][0-9]$' || true)
+# 3 digits is a MINIMUM, not a maximum: reconciler/ids.py pads to a fixed
+# width of 3 precisely so an id stays correct once the doc passes #999, and a
+# validator capping at 3 would make every item from #1000 on uncommittable.
+bad=$(grep -i '^Idea-Id:' "$msg_file" | grep -cv '^Idea-Id: willow-ideas-[0-9][0-9][0-9][0-9]*$' || true)
 if [ "$bad" -gt 0 ]; then
   echo "commit-msg: malformed Idea-Id trailer." >&2
-  grep -i '^Idea-Id:' "$msg_file" | grep -v '^Idea-Id: willow-ideas-[0-9][0-9][0-9]$' >&2
-  echo "expected exactly: Idea-Id: willow-ideas-NNN   (3 digits, zero-padded)" >&2
+  grep -i '^Idea-Id:' "$msg_file" | grep -v '^Idea-Id: willow-ideas-[0-9][0-9][0-9][0-9]*$' >&2
+  echo "expected: Idea-Id: willow-ideas-NNN   (at least 3 digits, zero-padded)" >&2
   echo "get the right line with: reconciler id --repo R --doc D --num N" >&2
   exit 1
 fi
@@ -98,11 +123,35 @@ HOOKS = {
 
 
 def hooks_dir(repo_path: Path) -> Path:
-    """The repo's hook directory, honouring `core.hooksPath` is deliberately
-    NOT attempted here: reading config would mean running git, and a wrong
-    guess installs a hook somewhere git will never call. `.git/hooks` is
-    reported in the result so the caller can see exactly where it went."""
-    return repo_path / ".git" / "hooks"
+    """The directory git will actually look in — `core.hooksPath` when the repo
+    sets one, else `.git/hooks`.
+
+    An earlier version hardcoded `.git/hooks` and documented not reading the
+    config as a deliberate simplification. It was not a safe one: a repo with
+    `core.hooksPath` set got a cheerful "installed" for two files git would
+    never run, and the silence looked exactly like a repo where the convention
+    simply was not being followed. Reporting success for an inert install is a
+    reporting lie, and this tool's whole argument is about not making confident
+    claims it cannot support."""
+    configured = _config_hooks_path(repo_path)
+    if configured is None:
+        return repo_path / ".git" / "hooks"
+    # git resolves a relative core.hooksPath against the current working
+    # directory at hook time, which for a hook is the repo top level.
+    path = Path(configured)
+    return path if path.is_absolute() else repo_path / path
+
+
+def _config_hooks_path(repo_path: Path) -> str | None:
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_path), "config", "--get", "core.hooksPath"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    value = proc.stdout.strip()
+    return value if proc.returncode == 0 and value else None
 
 
 def install_hooks(repo_path: Path, force: bool = False) -> dict:
@@ -110,12 +159,13 @@ def install_hooks(repo_path: Path, force: bool = False) -> dict:
     not write unless `force` — somebody else's prepare-commit-msg is not ours
     to silently replace. Re-running over our own previous install is always
     allowed, so upgrading is just running it again."""
-    hdir = hooks_dir(repo_path)
     results: list[dict] = []
     if not (repo_path / ".git").is_dir():
+        hdir = repo_path / ".git" / "hooks"
         return {"ok": False, "hooks_dir": str(hdir), "results": [],
                 "error": f"{repo_path} has no .git directory (not a git repo, or a "
                          f"worktree/submodule whose .git is a file)"}
+    hdir = hooks_dir(repo_path)
     hdir.mkdir(parents=True, exist_ok=True)
 
     for name, body in HOOKS.items():

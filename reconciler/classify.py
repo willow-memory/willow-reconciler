@@ -48,19 +48,38 @@ EXPLICIT = "explicit"
 INFERRED = "inferred"
 NONE_KIND = "none"   # not "explicit"/"inferred" evidence — the absence of any
 
-# A legend tag is a tag only at a DEFINED POSITION: leading the item text, or
-# leading the final separator-delimited clause (" — ✅ shipped: ..."). A marker
-# sitting mid-prose is a MENTION, and the audit already established for the
-# inferred tier that a mention is not evidence. The unanchored version of these
-# two regexes matched anywhere on the line, so an item that merely *discussed*
-# legend tags ("propose ✅/🟡 tags back into the doc") classified LANDED with
-# evidence_kind=explicit — the same over-claim, in the tier the ledger treats as
-# authoritative. Group 1 is the marker onward, so `_explicit_tag`'s evidence
-# text is unchanged; the full match additionally spans the separator, which is
-# what `validate.strip_legend_tag` wants to remove anyway.
-_TAG_ANCHOR = r"(?:^|\s[—–-]{1,2}\s*)"
-_SHIPPED_RE = re.compile(_TAG_ANCHOR + r"(✅[^\n]*)")
-_PARTIAL_RE = re.compile(_TAG_ANCHOR + r"(🟡[^\n]*)")
+# A legend tag is a tag only at a DEFINED POSITION, and — after the
+# post-write-side audit — only when it NAMES ITS LEGEND KEYWORD.
+#
+# Two rounds of the same over-claim got us here. The original regexes matched a
+# marker anywhere on the line, so an item merely discussing legend tags scored
+# LANDED. Anchoring to "start of text, or after a dash separator" fixed that
+# case but not the class: ordinary prose uses an em-dash too, so
+# "discusses history — ✅ marks were abused before" still read as a tag.
+#
+# The separator is not what makes a tag a tag; the legend does. The doc's own
+# legend defines ✅ as *shipped* and 🟡 as *partial*, so a dash-introduced
+# clause must actually say that word to count. A marker LEADING the item text
+# is unambiguous on its own and needs no keyword.
+#
+# This deliberately trades a little recall for precision in the tier the ledger
+# ranks highest. A missed tag costs one item out of the hand-tagged truth set;
+# a false tag is a confident wrong LANDED presented as the doc author's own
+# word. Under-claiming beats over-claiming — the same call the original audit
+# made when it deleted `find_token_match` rather than tightening it.
+_LEAD = r"^({marker}[^\n]*)"
+_CLAUSE = r"\s*[—–-]{{1,2}}\s*({marker}[\s*_`]*\b(?:{kw})\b[^\n]*)"
+
+_SHIPPED_LEAD_RE = re.compile(_LEAD.format(marker="✅"))
+_SHIPPED_CLAUSE_RE = re.compile(_CLAUSE.format(marker="✅", kw="shipped|landed"))
+_PARTIAL_LEAD_RE = re.compile(_LEAD.format(marker="🟡"))
+_PARTIAL_CLAUSE_RE = re.compile(_CLAUSE.format(marker="🟡", kw="partial"))
+
+
+def _first_tag_match(text: str, lead_re, clause_re):
+    """Leading position first, then the keyword-bearing trailing clause."""
+    return lead_re.search(text) or clause_re.search(text)
+
 
 _VALID_STATUSES = (LANDED, PARTIAL, NOT_STARTED)
 
@@ -81,10 +100,10 @@ def explicit_tag_span(text: str):
     duplicating the regex — see `validate.strip_legend_tag`. The match spans
     the anchoring separator as well as the marker, which is precisely the
     text the hold-out wants gone."""
-    m = _SHIPPED_RE.search(text)
+    m = _first_tag_match(text, _SHIPPED_LEAD_RE, _SHIPPED_CLAUSE_RE)
     if m:
         return m
-    return _PARTIAL_RE.search(text)
+    return _first_tag_match(text, _PARTIAL_LEAD_RE, _PARTIAL_CLAUSE_RE)
 
 
 def _explicit_tag(text: str) -> tuple[str, str] | None:
@@ -92,10 +111,10 @@ def _explicit_tag(text: str) -> tuple[str, str] | None:
     item can only carry one legend tag in this doc, but if a future edit
     ever left both, shipped is the stronger claim and wins deterministically
     rather than depending on which regex happens to run first."""
-    m = _SHIPPED_RE.search(text)
+    m = _first_tag_match(text, _SHIPPED_LEAD_RE, _SHIPPED_CLAUSE_RE)
     if m:
         return LANDED, m.group(1).strip()
-    m = _PARTIAL_RE.search(text)
+    m = _first_tag_match(text, _PARTIAL_LEAD_RE, _PARTIAL_CLAUSE_RE)
     if m:
         return PARTIAL, m.group(1).strip()
     return None

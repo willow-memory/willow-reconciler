@@ -47,7 +47,17 @@ PR_MENTION_RE = re.compile(r"(?i)\b(?:PR|pull request)\s*#(\d+)\b")
 # subject only (never the free-text body, which is where an unrelated '#123'
 # mention, like an issue reference, would otherwise leak in).
 _MERGE_COMMIT_RE = re.compile(r"^Merge pull request #(\d+)\b")
-_SQUASH_MERGE_RE = re.compile(r"\(#(\d+)\)\s*$")
+
+# REMOVED (post-audit): `_SQUASH_MERGE_RE = r"\(#(\d+)\)\s*$"`, which read a
+# trailing "(#N)" in a subject as GitHub's squash-merge title. That shape is
+# indistinguishable from the ordinary conventional-commit habit of appending an
+# issue or PR number to a normal commit subject, so an unrelated
+# "chore: cleanup unrelated issue (#42)" asserted LANDED for any item naming
+# "PR #42" — a reproducible false LANDED, the cardinal error. Nothing in git
+# can tell a squash-merge subject from a commit that merely ends that way, so
+# it is removed rather than tuned, exactly as the original audit removed
+# `find_token_match`. Repos that squash-merge get their landing signal from the
+# `Idea-Id` trailer (rule 2a), which is the durable key anyway.
 
 
 @dataclass(frozen=True)
@@ -55,6 +65,13 @@ class Commit:
     sha: str
     subject: str
     body: str
+    parents: tuple[str, ...] = ()
+
+    @property
+    def is_merge(self) -> bool:
+        """Two or more parents — git's own structural record that a merge
+        happened, as opposed to a subject that merely looks like one."""
+        return len(self.parents) >= 2
 
     @property
     def full_text(self) -> str:
@@ -75,15 +92,30 @@ class GitLog:
         so a caller can report the gap rather than crash: an idea-doc in a
         repo with no `.git` (or git not installed) still parses and
         classifies, it just gets no inferred evidence."""
-        fmt = f"%H{_SEP}%s{_SEP}%b{_END}"
+        fmt = f"%H{_SEP}%P{_SEP}%s{_SEP}%b{_END}"
         try:
             proc = subprocess.run(
-                ["git", "-C", repo_path, "log", "--all", f"--format={fmt}"],
+                # HEAD, not --all. `--all` is reachable-from-ANY-ref, so a
+                # trailer on an abandoned or rejected branch — work that was
+                # deliberately never merged — resolved as LANDED, and `verify`
+                # called it ok. That is a false LANDED sourced from the ref
+                # scope rather than from a regex, which is the same cardinal
+                # error this module was rebuilt to prevent. Evidence must be
+                # reachable from the checkout being reconciled.
+                ["git", "-C", repo_path, "log", f"--format={fmt}"],
                 capture_output=True, text=True, timeout=60,
             )
         except (OSError, subprocess.SubprocessError) as e:
             return cls(repo_path=repo_path, available=False, error=str(e))
         if proc.returncode != 0:
+            # A freshly-`git init`ed repo has an unborn HEAD, so `git log`
+            # exits non-zero — but an empty history is a legitimate, usable
+            # (if evidence-free) history, not a failure to read one. The old
+            # `--all` form returned empty output with status 0 here and so
+            # never hit this branch. One extra subprocess, in the failure path
+            # only, tells "not a git repo" apart from "git repo, no commits".
+            if cls._is_git_repo(repo_path):
+                return cls(repo_path=repo_path, commits=(), available=True)
             return cls(repo_path=repo_path, available=False,
                        error=proc.stderr.strip() or f"git log exited {proc.returncode}")
         commits = []
@@ -92,11 +124,21 @@ class GitLog:
             if not rec:
                 continue
             parts = rec.split(_SEP)
-            if len(parts) != 3:
+            if len(parts) != 4:
                 continue
-            sha, subject, body = parts
-            commits.append(Commit(sha=sha, subject=subject, body=body))
+            sha, parents, subject, body = parts
+            commits.append(Commit(sha=sha, subject=subject, body=body,
+                                  parents=tuple(parents.split())))
         return cls(repo_path=repo_path, commits=tuple(commits), available=True)
+
+    @staticmethod
+    def _is_git_repo(repo_path: str) -> bool:
+        try:
+            proc = subprocess.run(["git", "-C", repo_path, "rev-parse", "--git-dir"],
+                                  capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return proc.returncode == 0
 
     def find_idea_trailer(self, idea_id: str) -> tuple[Commit, str] | None:
         """Exact `Idea-Id: <idea_id>` trailer match — the highest-confidence
@@ -122,19 +164,22 @@ class GitLog:
         return None
 
     def find_merged_pr(self, pr_num: int) -> Commit | None:
-        """A commit whose SUBJECT shows GitHub's own record of merging PR
-        `pr_num` — either a merge commit ("Merge pull request #N from ...")
-        or a squash-merge title ("... (#N)"). This is what makes the PR
+        """A real merge commit (two or more parents) whose SUBJECT is GitHub's
+        own record of merging PR `pr_num` ("Merge pull request #N from ...").
+        Both conditions are required: the subject is a string anyone can
+        write, while the parent count is structural. This is what makes the PR
         number a REAL, resolved signal rather than a bare mention: it is
         git's own account of a merge having happened, not a string that
         merely contains the same digits. Only ever called with a `pr_num`
         the ITEM TEXT explicitly names as a PR (`PR_MENTION_RE` in
         classify.py) — this method never guesses which number to look for."""
         for c in self.commits:
+            # Both halves must hold: git's own merge-commit SUBJECT *and* two
+            # or more parents. The subject alone is a string anyone can write;
+            # the parent count is structural and cannot be faked by prose.
+            if not c.is_merge:
+                continue
             m = _MERGE_COMMIT_RE.match(c.subject)
-            if m and int(m.group(1)) == pr_num:
-                return c
-            m = _SQUASH_MERGE_RE.search(c.subject)
             if m and int(m.group(1)) == pr_num:
                 return c
         return None
@@ -157,6 +202,12 @@ class GitLog:
             # partially is saying so about all of them. Splitting status per id
             # would need a richer trailer shape than the convention defines.
             status = status_m.group(1).lower() if status_m else "landed"
+            seen: set[str] = set()
             for m in _IDEA_ID_TRAILER_RE.finditer(c.full_text):
+                # One commit repeating the same id is one claim, not two —
+                # counting it twice would inflate `verify`'s totals.
+                if m.group(1) in seen:
+                    continue
+                seen.add(m.group(1))
                 out.append((c, m.group(1), status))
         return out

@@ -171,6 +171,7 @@ def cmd_install_hook(repo: str, force: bool = False,
     if result.get("error"):
         print(f"error: {result['error']}", file=sys.stderr)
         return 2
+    print(f"hooks directory: {result['hooks_dir']}", file=sys.stderr)
     for row in result["results"]:
         if row["action"] == "skipped":
             print(f"skipped {row['hook']}: {row['reason']}", file=sys.stderr)

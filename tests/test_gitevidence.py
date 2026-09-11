@@ -46,17 +46,34 @@ def test_idea_trailer_honors_idea_status_partial(repo_factory):
     assert status == "partial"
 
 
-def test_find_merged_pr_via_merge_commit(repo_factory):
-    repo = repo_factory(["Merge pull request #77 from someone/branch"])
+def test_find_merged_pr_via_a_real_merge_commit(repo_factory):
+    """Requires BOTH halves: GitHub's merge subject and two or more parents."""
+    repo = repo_factory(["chore: base"])
+    _run(["git", "checkout", "-q", "-b", "side"], repo)
+    (repo / "side.txt").write_text("side\n")
+    _run(["git", "add", "side.txt"], repo)
+    _run(["git", "commit", "-q", "-m", "feat: side work"], repo)
+    _run(["git", "checkout", "-q", "-"], repo)
+    _run(["git", "merge", "--no-ff", "-q", "-m",
+          "Merge pull request #77 from someone/branch", "side"], repo)
     gitlog = GitLog.load(str(repo))
     assert gitlog.find_merged_pr(77) is not None
     assert gitlog.find_merged_pr(78) is None
 
 
-def test_find_merged_pr_via_squash_merge_title(repo_factory):
-    repo = repo_factory(["feat: ship the widget (#88)"])
-    gitlog = GitLog.load(str(repo))
-    assert gitlog.find_merged_pr(88) is not None
+def test_a_merge_subject_without_merge_parents_is_not_evidence(repo_factory):
+    """Anyone can write that subject on an ordinary commit; only the parent
+    count is structural."""
+    repo = repo_factory(["Merge pull request #77 from someone/branch"])
+    assert GitLog.load(str(repo)).find_merged_pr(77) is None
+
+
+def test_a_trailing_pr_number_in_a_subject_is_not_a_merge(repo_factory):
+    """The removed squash heuristic: "(#88)" trailing a subject is the ordinary
+    conventional-commit habit of naming an issue, not proof of a merge. It
+    produced a reproducible false LANDED and is gone rather than tuned."""
+    repo = repo_factory(["chore: cleanup unrelated issue (#88)"])
+    assert GitLog.load(str(repo)).find_merged_pr(88) is None
 
 
 def test_find_merged_pr_does_not_match_body_only_mention(repo_factory):
@@ -116,3 +133,50 @@ def test_a_commit_landing_several_ideas_registers_every_trailer(repo_factory):
     assert len(log.all_idea_trailers()) == 3
     for n in ("001", "002", "003"):
         assert log.find_idea_trailer(f"willow-ideas-{n}") is not None
+
+
+def test_a_trailer_on_an_unmerged_branch_is_not_evidence(repo_factory):
+    """Finding #1 of the post-write-side audit. `git log --all` is
+    reachable-from-ANY-ref, so a trailer on work that was deliberately
+    abandoned resolved as LANDED — a false LANDED sourced from the ref scope
+    rather than from a regex."""
+    repo = repo_factory(["chore: base"])
+    _run(["git", "checkout", "-q", "-b", "abandoned"], repo)
+    (repo / "x.txt").write_text("x\n")
+    _run(["git", "add", "x.txt"], repo)
+    _run(["git", "commit", "-q", "-m", "feat: rejected\n\nIdea-Id: willow-ideas-050"], repo)
+    _run(["git", "checkout", "-q", "-"], repo)
+
+    gitlog = GitLog.load(str(repo))
+    assert gitlog.find_idea_trailer("willow-ideas-050") is None
+    assert gitlog.all_idea_trailers() == []
+
+
+def test_a_trailer_merged_into_the_checkout_is_evidence(repo_factory):
+    """The other half: once that branch actually merges, it counts."""
+    repo = repo_factory(["chore: base"])
+    _run(["git", "checkout", "-q", "-b", "side"], repo)
+    (repo / "x.txt").write_text("x\n")
+    _run(["git", "add", "x.txt"], repo)
+    _run(["git", "commit", "-q", "-m", "feat: real\n\nIdea-Id: willow-ideas-050"], repo)
+    _run(["git", "checkout", "-q", "-"], repo)
+    _run(["git", "merge", "--no-ff", "-q", "-m", "Merge pull request #1 from x/side",
+          "side"], repo)
+
+    assert GitLog.load(str(repo)).find_idea_trailer("willow-ideas-050") is not None
+
+
+def test_an_empty_repo_reads_as_an_available_but_empty_history(tmp_path):
+    """A freshly-init'd repo has an unborn HEAD, so `git log` exits non-zero —
+    but an empty history is usable and evidence-free, not unreadable."""
+    repo = tmp_path / "fresh"
+    repo.mkdir()
+    _run(["git", "init", "-q"], repo)
+    log = GitLog.load(str(repo))
+    assert log.available is True
+    assert log.commits == ()
+
+
+def test_a_repeated_identical_trailer_counts_once(repo_factory):
+    repo = repo_factory(["feat: x\n\nIdea-Id: willow-ideas-001\nIdea-Id: willow-ideas-001"])
+    assert len(GitLog.load(str(repo)).all_idea_trailers()) == 1

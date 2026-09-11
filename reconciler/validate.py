@@ -81,6 +81,21 @@ def holdout_score(items: list[Item], gitlog: GitLog) -> dict:
     `cli.py --validate` for how this renders."""
     truth = hand_tags(items)
     by_num = {item.num: item for item in items}
+    # A WORD ON WHAT A HIGH SCORE HERE DOES AND DOES NOT MEAN.
+    #
+    # Unlike `echo_check`, this is a genuinely different code path from the
+    # ground truth — a real `git log` trailer lookup, not the same regex read
+    # twice — so it does prove the trailer mechanism resolves end to end.
+    #
+    # But it is still only as honest as the trailers it reads. When the same
+    # author writes a commit's `Idea-Id` trailer and the doc's legend tag for
+    # that item in the SAME commit, perfect correspondence is guaranteed by
+    # construction: the score then measures plumbing ("a correct trailer is
+    # found"), not capability ("landings can be recovered"). Such a number must
+    # never be set beside the willow-mcp corpus's 0.0 as though the two
+    # measured the same thing — the corpus number is about trailers that
+    # accumulated organically, disconnected from doc edits, which is the only
+    # condition this tool actually has to survive.
     detail = []
     for num, expected in sorted(truth.items()):
         item = by_num[num]
