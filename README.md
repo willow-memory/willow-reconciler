@@ -103,6 +103,20 @@ only ever call `git log`.
   installer; the one place this tool writes outside its own repo.
 - **cli** — `run`, `id`, `verify`, `install-hook`.
 
+## The adversarial corpus
+
+`tests/fixtures/` carries a small idea pile plus a scripted git history in
+which every line is a trap one of this repo's audits actually reproduced — a
+joke item naming a real tool, an idea cross-reference shaped like a PR number,
+a conventional-commit subject ending `(#42)`, a trailer on a branch that was
+never merged, a legend marker sitting in ordinary prose. `EXPECTED` in
+`tests/fixtures/corpus.py` is the ground truth, hand-written from the traps'
+intent rather than generated from the classifier, so it cannot drift into
+agreeing with a regression.
+
+Loosening the rule stack has to get past that file first. Both audits so far
+found bugs a fixture like this would have caught before they shipped.
+
 ## Why prospective, not retroactive
 
 Slice 0 measured, on a held-out split of the *current* corpus with legend tags

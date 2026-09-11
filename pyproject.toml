@@ -31,3 +31,7 @@ reconciler = "reconciler.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["reconciler"]
+
+[tool.pytest.ini_options]
+# tests/fixtures/ is importable so conftest can build the adversarial corpus.
+pythonpath = ["tests"]

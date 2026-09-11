@@ -180,3 +180,31 @@ def test_an_empty_repo_reads_as_an_available_but_empty_history(tmp_path):
 def test_a_repeated_identical_trailer_counts_once(repo_factory):
     repo = repo_factory(["feat: x\n\nIdea-Id: willow-ideas-001\nIdea-Id: willow-ideas-001"])
     assert len(GitLog.load(str(repo)).all_idea_trailers()) == 1
+
+
+def test_a_commit_discussing_a_trailer_does_not_carry_it(repo_factory):
+    """Mention is not evidence, in the evidence layer: prose explaining the
+    convention must not read as a claim on an idea."""
+    repo = repo_factory([
+        "docs: explain the convention\n\n"
+        "A commit that half-lands an idea adds a line reading\n"
+        "Idea-Status: partial — and names the id with\n"
+        "Idea-Id: willow-ideas-001 on its own line.\n\n"
+        "Co-Authored-By: Someone <s@example.com>"
+    ])
+    log = GitLog.load(str(repo))
+    assert log.all_idea_trailers() == []
+    assert log.find_idea_trailer("willow-ideas-001") is None
+
+
+def test_a_trailer_paragraph_above_the_coauthor_block_still_counts(repo_factory):
+    """The convention's own commits put Idea-Id in its own paragraph above
+    Co-Authored-By; git proper would count only the last paragraph, which
+    would discard every trailer written so far."""
+    repo = repo_factory([
+        "feat: thing\n\nsome prose here.\n\n"
+        "Idea-Id: willow-ideas-002\nIdea-Status: partial\n\n"
+        "Co-Authored-By: Someone <s@example.com>"
+    ])
+    hit = GitLog.load(str(repo)).find_idea_trailer("willow-ideas-002")
+    assert hit is not None and hit[1] == "partial"
