@@ -6,29 +6,59 @@ sentence stating the result in words, an `n` that is the same count the
 headline describes, and a `reading` line giving direction guidance. This
 module is the one place that shape is assembled, so every renderer/consumer
 sees the same three fields regardless of format.
+
+REDESIGN (post Opus-audit rework): the previous headline pooled
+explicit-landed and inferred-landed into a single "N landed" figure with no
+split visible where a reader would actually see it (finding #5 of the
+audit — 12 real + 11 false inferred both counted as "landed" in the
+headline sentence). `counts_by_status` alone is not enough to prevent this,
+because a reader can look at ONE number without opening `counts_by_status`;
+the headline sentence itself must carry the split now, and every per-item
+row already carries `evidence_kind` alongside `status` for the same reason.
 """
 from __future__ import annotations
 
-from .classify import LANDED, NOT_STARTED, PARTIAL, Verdict
+from .classify import EXPLICIT, INFERRED, LANDED, NOT_STARTED, PARTIAL, Verdict
 
 
 def build_ledger(doc: str, repo: str, items_total: int, dropped: int,
                  verdicts: list[Verdict]) -> dict:
     by_status = {LANDED: 0, PARTIAL: 0, NOT_STARTED: 0}
+    by_status_and_kind: dict[tuple[str, str], int] = {}
     for v in verdicts:
         by_status[v.status] += 1
+        key = (v.status, v.evidence_kind)
+        by_status_and_kind[key] = by_status_and_kind.get(key, 0) + 1
     n = len(verdicts)
 
     duplicates = _duplicate_nums(verdicts)
 
-    headline = (f"Of {n} item(s) parsed from {doc} ({repo}), "
-                f"{by_status[LANDED]} landed, {by_status[PARTIAL]} partial, "
-                f"{by_status[NOT_STARTED]} show no evidence of having started.")
-    reading = ("'landed'/'partial' here mean 'evidence was found', not an audited "
-               "completeness claim; 'not_started' means 'no evidence found', not "
-               "'proven unbuilt'. See each item's evidence_kind: explicit (the doc's "
-               "own legend tag) outranks inferred (a git-log match), which outranks "
-               "none (nothing located).")
+    n_explicit = sum(1 for v in verdicts if v.evidence_kind == EXPLICIT)
+    landed_explicit = by_status_and_kind.get((LANDED, EXPLICIT), 0)
+    landed_inferred = by_status_and_kind.get((LANDED, INFERRED), 0)
+    partial_explicit = by_status_and_kind.get((PARTIAL, EXPLICIT), 0)
+    partial_inferred = by_status_and_kind.get((PARTIAL, INFERRED), 0)
+    n_untagged = n - n_explicit
+    # NOT_STARTED is only ever reached with no evidence at all (rule 1 never
+    # returns it, and rule 2 only returns when it found something) — so every
+    # not_started item is, by construction, one of the untagged items.
+    n_untagged_with_signal = n_untagged - by_status.get(NOT_STARTED, 0)
+
+    headline = (
+        f"Of {n} item(s) parsed from {doc} ({repo}): {n_explicit} carry the doc's own "
+        f"explicit legend tag ({landed_explicit} landed, {partial_explicit} partial — "
+        f"read back verbatim, not classified). Of the remaining {n_untagged} untagged "
+        f"item(s), {n_untagged_with_signal} resolved to a real inferred signal "
+        f"({landed_inferred} landed, {partial_inferred} partial) and "
+        f"{by_status[NOT_STARTED]} show no reliable automatic landing signal."
+    )
+    reading = ("NEVER read 'landed' as one pooled figure — explicit and inferred landed "
+               "counts are kept apart on purpose (an explicit tag is the doc author's own "
+               "word; an inferred hit is this tool's own git-log resolution, weaker and "
+               "reported as such). 'not_started' means 'no evidence found', not 'proven "
+               "unbuilt'. See each item's evidence_kind: explicit outranks inferred, which "
+               "outranks none (nothing located). See `--validate`'s hold-out score for what "
+               "the inferred tier can actually recover without being handed a tag.")
 
     return {
         "doc": doc,
@@ -42,6 +72,7 @@ def build_ledger(doc: str, repo: str, items_total: int, dropped: int,
         "duplicate_nums": duplicates,
         "counts_by_status": by_status,
         "counts_by_evidence_kind": _by_evidence_kind(verdicts),
+        "counts_by_status_and_kind": {f"{s}/{k}": v for (s, k), v in by_status_and_kind.items()},
         "items": [
             {
                 "idea_id": v.idea_id,

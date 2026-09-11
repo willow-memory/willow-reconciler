@@ -71,7 +71,10 @@ def run(repo: str, doc: str, fmt: str = "markdown", do_validate: bool = False,
 
     if do_validate:
         truth = validatemod.hand_tags(items)
-        ledger["validation"] = validatemod.score(truth, verdicts)
+        ledger["validation"] = {
+            "echo_check": validatemod.echo_check(truth, verdicts),
+            "holdout": validatemod.holdout_score(items, gitlog),
+        }
 
     print(_render(ledger, fmt))
     return 0
@@ -91,17 +94,20 @@ def _render(ledger: dict, fmt: str) -> str:
         lines.append(f"- **duplicate item numbers** (surfaced, not resolved): "
                      f"{ledger['duplicate_nums']}")
     if "validation" in ledger:
-        v = ledger["validation"]
-        lines += ["", "## validation vs hand-tagged items", "",
-                  f"n hand-tagged = {v['n_hand_tagged']}, covered by this run = "
-                  f"{v['n_covered']}, accuracy = {v['accuracy']}"]
-        if v["missing_from_run"]:
-            lines.append(f"- missing from this run's parse: {v['missing_from_run']}")
-        for status, pc in v["per_class"].items():
-            lines.append(f"- **{status}**: precision={pc['precision']} recall={pc['recall']} "
-                         f"(tp={pc['tp']} fp={pc['fp']} fn={pc['fn']})")
-        if v["disagreements"]:
-            lines.append(f"- disagreements: {v['disagreements']}")
+        ec = ledger["validation"]["echo_check"]
+        ho = ledger["validation"]["holdout"]
+        lines += ["", "## validation", "",
+                  f"**echo check** (trivial — rule 1 reading its own tag back; NOT a "
+                  f"capability number): n={ec['n']}, accuracy={ec['accuracy']}. {ec['note']}",
+                  "",
+                  f"**hold-out score** (the real Slice-0 acceptance number — legend tag "
+                  f"stripped, then reclassified with only the inferred/not_started tiers): "
+                  f"{ho['n_recovered']}/{ho['n_hand_tagged']} recovered "
+                  f"(recovery_rate={ho['recovery_rate']})."]
+        for d in ho["detail"]:
+            mark = "OK" if d["recovered"] else "MISS"
+            lines.append(f"  - [{mark}] {d['idea_id']}: expected={d['expected']} "
+                         f"got={d['got']} ({d['evidence_kind']})")
     return "\n".join(lines)
 
 

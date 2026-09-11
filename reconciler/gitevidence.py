@@ -4,6 +4,20 @@ Never mutates the target repo: this module only ever calls `git log`, never
 `git checkout`/`git reset`/anything that touches the worktree or refs. One
 subprocess call per repo per run (`GitLog.load`), then every lookup below is
 in-memory — so a doc with 100+ items costs one `git log`, not one per item.
+
+REDESIGN NOTE (post Opus-audit rework, Slice 0): the original version of this
+module also offered `find_token_match` — a bare backtick-identifier lookup
+against commit text. An independent audit found that path was ~0/11 precision
+on the real target doc: it fired on THE CHAOS CANON's joke items whenever
+their satirical text happened to name a real tool (e.g. "whoami develops
+doubt" matched a real whoami-touching commit), and separately on rule 2b's
+old `find_pr_reference`, which matched ANY `#\\d+` substring — including idea
+cross-references like "folds in former #103", not just real PR numbers. Both
+were removed rather than tuned: a bare mention is not landing evidence, and
+under-claiming (abstain) beats over-claiming (a false "landed"). What
+replaces them below only asserts LANDED from evidence that resolves to
+something real: an explicit author-written trailer, or a PR number that this
+git history can show was actually merged.
 """
 from __future__ import annotations
 
@@ -15,13 +29,25 @@ _SEP = "\x01"        # field separator inside one commit's record
 _END = "\x02"        # record separator between commits
 
 _IDEA_ID_TRAILER_RE = re.compile(r"(?im)^Idea-Id:\s*(willow-ideas-\S+)\s*$")
-_PR_REF_RE = re.compile(r"#(\d+)\b")
+_IDEA_STATUS_TRAILER_RE = re.compile(r"(?im)^Idea-Status:\s*(landed|partial)\s*$")
 
-# A "strong" token: a backtick-quoted code identifier of enough length that
-# matching it against a commit subject/body is unlikely to be coincidence.
-# Kept short and named here (not buried in classify.py) since it is the one
-# knob that trades inferred-recall for inferred-precision.
-_MIN_TOKEN_LEN = 6
+# A PR number is evidence ONLY when the item text names it as a pull request,
+# not merely as a number that happens to follow '#' — an idea doc cross-
+# referencing another idea ("folds in former #103", "idea #8, promoted to
+# canon") uses the exact same '#123' shape a PR reference does, and the two
+# must never be conflated (that conflation was finding #3c of the audit).
+# Requiring the word 'PR' or 'pull request' immediately before the number is
+# a real (if narrow) disambiguator: nothing in ideas.md's idea-cross-
+# reference prose happens to read that way, and an author who actually meant
+# a pull request has an unambiguous way to say so.
+PR_MENTION_RE = re.compile(r"(?i)\b(?:PR|pull request)\s*#(\d+)\b")
+
+# What GitHub itself writes into a commit SUBJECT when a PR is merged — the
+# two shapes it produces depending on merge strategy. Matched against the
+# subject only (never the free-text body, which is where an unrelated '#123'
+# mention, like an issue reference, would otherwise leak in).
+_MERGE_COMMIT_RE = re.compile(r"^Merge pull request #(\d+)\b")
+_SQUASH_MERGE_RE = re.compile(r"\(#(\d+)\)\s*$")
 
 
 @dataclass(frozen=True)
@@ -72,39 +98,40 @@ class GitLog:
             commits.append(Commit(sha=sha, subject=subject, body=body))
         return cls(repo_path=repo_path, commits=tuple(commits), available=True)
 
-    def find_idea_trailer(self, idea_id: str) -> Commit | None:
-        """Exact `Idea-Id: <idea_id>` trailer match. Highest-confidence
-        inferred evidence: an explicit, structured link a commit author
-        wrote on purpose."""
+    def find_idea_trailer(self, idea_id: str) -> tuple[Commit, str] | None:
+        """Exact `Idea-Id: <idea_id>` trailer match — the highest-confidence
+        inferred evidence, since an author wrote the exact link on purpose.
+
+        Returns (commit, status). Status defaults to "landed" unless the
+        SAME commit also carries an `Idea-Status: partial` trailer — this is
+        the inferred tier's route to PARTIAL: it is data-driven from what the
+        commit actually says, never a hardcoded LANDED regardless of
+        evidence (that hardcoding was finding #4 of the audit). No commit in
+        the current fleet history writes this trailer yet; the mechanism is
+        proven by `tests/test_gitevidence.py`, not by a hit on the real
+        doc — see `cli.py`'s reported counts."""
         for c in self.commits:
             m = _IDEA_ID_TRAILER_RE.search(c.full_text)
             if m and m.group(1) == idea_id:
-                return c
+                status_m = _IDEA_STATUS_TRAILER_RE.search(c.full_text)
+                status = status_m.group(1).lower() if status_m else "landed"
+                return c, status
         return None
 
-    def find_pr_reference(self, pr_num: int) -> Commit | None:
-        """A commit whose subject/body names this exact PR number (`#123`).
-        Only consulted when the ITEM TEXT itself names a PR number (see
-        classify.py) — this module never invents one."""
-        needle = f"#{pr_num}"
+    def find_merged_pr(self, pr_num: int) -> Commit | None:
+        """A commit whose SUBJECT shows GitHub's own record of merging PR
+        `pr_num` — either a merge commit ("Merge pull request #N from ...")
+        or a squash-merge title ("... (#N)"). This is what makes the PR
+        number a REAL, resolved signal rather than a bare mention: it is
+        git's own account of a merge having happened, not a string that
+        merely contains the same digits. Only ever called with a `pr_num`
+        the ITEM TEXT explicitly names as a PR (`PR_MENTION_RE` in
+        classify.py) — this method never guesses which number to look for."""
         for c in self.commits:
-            if any(m.group(0) == needle for m in _PR_REF_RE.finditer(c.full_text)):
+            m = _MERGE_COMMIT_RE.match(c.subject)
+            if m and int(m.group(1)) == pr_num:
                 return c
-        return None
-
-    def find_token_match(self, tokens: tuple[str, ...]) -> tuple[Commit, str] | None:
-        """First commit whose subject or body contains one of `tokens` (a
-        backtick-quoted identifier lifted from the item's own text) as a
-        whole word, longest token first. Returns (commit, token) so the
-        caller can name exactly what matched. `tokens` shorter than
-        `_MIN_TOKEN_LEN` are skipped — short identifiers (`run`, `db`) match
-        by accident too often to count as evidence."""
-        candidates = sorted(
-            (t for t in tokens if len(t) >= _MIN_TOKEN_LEN), key=len, reverse=True
-        )
-        for token in candidates:
-            pat = re.compile(r"\b" + re.escape(token) + r"\b")
-            for c in self.commits:
-                if pat.search(c.full_text):
-                    return c, token
+            m = _SQUASH_MERGE_RE.search(c.subject)
+            if m and int(m.group(1)) == pr_num:
+                return c
         return None

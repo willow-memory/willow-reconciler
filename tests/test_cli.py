@@ -26,7 +26,19 @@ def test_run_writes_json_with_expected_counts(tiny_repo, capsys):
     out = json.loads(capsys.readouterr().out)
     assert out["n"] == 3
     assert out["counts_by_status"] == {"landed": 1, "partial": 1, "not_started": 1}
-    assert out["validation"]["accuracy"] == 1.0
+    assert out["validation"]["echo_check"]["accuracy"] == 1.0
+    # hold-out: stripping the tags from these two toy items leaves no real
+    # (Idea-Id trailer / merged-PR) evidence in this empty toy repo, so
+    # recovery is honestly 0 here too.
+    assert out["validation"]["holdout"]["n_recovered"] == 0
+
+
+def test_headline_splits_explicit_and_inferred_landed(tiny_repo, capsys):
+    rc = run(repo="toyrepo", doc="docs/ideas.md", fmt="json", fleet_root=tiny_repo.parent)
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert "explicit legend tag" in out["headline"]
+    assert "no reliable automatic landing signal" in out["headline"]
 
 
 def test_run_unknown_repo_errors_cleanly(tmp_path, capsys):
