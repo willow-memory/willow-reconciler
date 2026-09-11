@@ -48,8 +48,19 @@ EXPLICIT = "explicit"
 INFERRED = "inferred"
 NONE_KIND = "none"   # not "explicit"/"inferred" evidence — the absence of any
 
-_SHIPPED_RE = re.compile(r"(✅[^\n]*)")
-_PARTIAL_RE = re.compile(r"(🟡[^\n]*)")
+# A legend tag is a tag only at a DEFINED POSITION: leading the item text, or
+# leading the final separator-delimited clause (" — ✅ shipped: ..."). A marker
+# sitting mid-prose is a MENTION, and the audit already established for the
+# inferred tier that a mention is not evidence. The unanchored version of these
+# two regexes matched anywhere on the line, so an item that merely *discussed*
+# legend tags ("propose ✅/🟡 tags back into the doc") classified LANDED with
+# evidence_kind=explicit — the same over-claim, in the tier the ledger treats as
+# authoritative. Group 1 is the marker onward, so `_explicit_tag`'s evidence
+# text is unchanged; the full match additionally spans the separator, which is
+# what `validate.strip_legend_tag` wants to remove anyway.
+_TAG_ANCHOR = r"(?:^|\s[—–-]{1,2}\s*)"
+_SHIPPED_RE = re.compile(_TAG_ANCHOR + r"(✅[^\n]*)")
+_PARTIAL_RE = re.compile(_TAG_ANCHOR + r"(🟡[^\n]*)")
 
 _VALID_STATUSES = (LANDED, PARTIAL, NOT_STARTED)
 
@@ -67,7 +78,9 @@ def explicit_tag_span(text: str):
     """Returns the `re.Match` for whichever legend tag is present (✅ checked
     before 🟡 — see `_explicit_tag`), or None. Exposed (not prefixed `_`) so
     `validate.py`'s hold-out can find and strip exactly this span without
-    duplicating the regex — see `validate.strip_legend_tag`."""
+    duplicating the regex — see `validate.strip_legend_tag`. The match spans
+    the anchoring separator as well as the marker, which is precisely the
+    text the hold-out wants gone."""
     m = _SHIPPED_RE.search(text)
     if m:
         return m

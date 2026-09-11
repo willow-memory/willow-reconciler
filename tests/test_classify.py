@@ -125,3 +125,42 @@ def test_unavailable_gitlog_falls_to_not_started_and_says_so():
     v = classify_item("willow-ideas-017", 17, text, UNAVAILABLE_GITLOG)
     assert v.status == NOT_STARTED
     assert "git history was unavailable" in v.evidence
+
+
+# --- legend-tag anchoring -------------------------------------------------
+# A marker mid-prose is a MENTION, not a tag. Regression guard for the
+# over-claim found by running the reconciler against its own docs/ideas.md:
+# an item merely *discussing* legend tags classified LANDED/explicit.
+
+def test_shipped_marker_mid_prose_is_not_a_tag():
+    text = "`reconciler annotate` — propose ✅/🟡 legend tags back into the doc."
+    v = classify_item("willow-ideas-016", 16, text, EMPTY_GITLOG)
+    assert v.status == NOT_STARTED
+    assert v.evidence_kind == NONE_KIND
+
+
+def test_partial_marker_mid_prose_is_not_a_tag():
+    text = "the legend uses 🟡 for partially landed items, which is fine"
+    v = classify_item("willow-ideas-025", 25, text, EMPTY_GITLOG)
+    assert v.status == NOT_STARTED
+    assert v.evidence_kind == NONE_KIND
+
+
+def test_tag_leading_the_item_text_is_a_tag():
+    v = classify_item("willow-ideas-026", 26, "✅ shipped in v0.1.0", EMPTY_GITLOG)
+    assert v.status == LANDED
+    assert v.evidence_kind == EXPLICIT
+
+
+def test_tag_after_a_double_hyphen_separator_is_a_tag():
+    v = classify_item("willow-ideas-027", 27, "an idea -- 🟡 **partial**", EMPTY_GITLOG)
+    assert v.status == PARTIAL
+    assert v.evidence_kind == EXPLICIT
+
+
+def test_evidence_text_excludes_the_separator():
+    """Group 1 is the marker onward, so anchoring did not change what a
+    reader is shown as the evidence for an explicit verdict."""
+    v = classify_item("willow-ideas-028", 28, "an idea — ✅ **shipped**: in `x.py`.",
+                      EMPTY_GITLOG)
+    assert v.evidence == "✅ **shipped**: in `x.py`."

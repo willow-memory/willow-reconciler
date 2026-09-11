@@ -94,3 +94,17 @@ def test_holdout_never_over_claims_via_removed_signals(real_run):
     result = holdout_score(items, gitlog)
     inferred_hits = [d for d in result["detail"] if d["evidence_kind"] == "inferred"]
     assert inferred_hits == []
+
+
+def test_strip_legend_tag_removes_the_anchored_separator_too():
+    """The anchored span now covers the ` — ` in front of the tag, so the
+    stripped text is the idea alone — no dangling separator for the inferred
+    tier to see."""
+    assert strip_legend_tag("an idea — ✅ **shipped**: in `x.py`.") == "an idea"
+
+
+def test_strip_legend_tag_leaves_a_mid_prose_marker_alone():
+    """A mention is not a tag, so there is nothing to strip — and stripping it
+    would silently delete real item text."""
+    text = "propose ✅/🟡 legend tags back into the doc"
+    assert strip_legend_tag(text) == text
