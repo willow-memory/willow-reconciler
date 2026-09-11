@@ -249,3 +249,35 @@ class GitLog:
                 seen.add(m.group(1))
                 out.append((c, m.group(1), status))
         return out
+
+
+def changed_paths(repo_path: str) -> dict[str, tuple[str, ...]]:
+    """{sha: paths changed} for every commit reachable from HEAD.
+
+    A second `git log`, deliberately kept out of `GitLog.load`: the classify
+    path stays at one subprocess per run, and only the benchmark — which asks
+    a different question — pays for this.
+
+    Merge commits list no paths under plain `git log --name-only`. That is
+    accepted rather than worked around (`-m` would multiply every merge by its
+    parent count): a merge commit's message is GitHub's, not an author's, so
+    it is not where trailers get written.
+    """
+    fmt = f"{_END}%H"
+    try:
+        proc = subprocess.run(
+            ["git", "-C", repo_path, "log", f"--format={fmt}", "--name-only"],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    if proc.returncode != 0:
+        return {}
+
+    out: dict[str, tuple[str, ...]] = {}
+    for rec in proc.stdout.split(_END):
+        lines = [ln for ln in rec.splitlines() if ln.strip()]
+        if not lines:
+            continue
+        out[lines[0]] = tuple(lines[1:])
+    return out

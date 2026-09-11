@@ -4,6 +4,7 @@
     reconciler id --repo willow-mcp --doc docs/ideas.md (--num N | --grep TEXT)
     reconciler verify --repo willow-mcp --doc docs/ideas.md [--format markdown|json]
     reconciler install-hook --repo willow-mcp [--force]
+    reconciler benchmark --repo willow-mcp --doc docs/ideas.md [--format markdown|json]
 
 `run` and `verify` are read-only (`git log` only). `install-hook` is the one
 verb that writes into the target repo, which is why it is a verb and not a
@@ -27,6 +28,7 @@ import sys
 from pathlib import Path
 
 from . import validate as validatemod
+from .benchmark import benchmark
 from .classify import classify_item
 from .emit import VALID_STATUSES, find_items, trailer_block
 from .gitevidence import GitLog
@@ -180,6 +182,42 @@ def cmd_install_hook(repo: str, force: bool = False,
     return 0 if result["ok"] else 1
 
 
+def cmd_benchmark(repo: str, doc: str, fmt: str = "markdown",
+                  fleet_root: Path | None = None) -> int:
+    """Never exits non-zero on a low score. A 0.0 independent rate is the
+    expected reading for a convention that has been demonstrated but not yet
+    lived in — the fix is time, not code, and a gate here would only invite
+    someone to game the number."""
+    loaded = _load(repo, doc, fleet_root)
+    if isinstance(loaded, int):
+        return loaded
+    repo_path, items, _ = loaded
+
+    result = benchmark(items, GitLog.load(str(repo_path)), str(repo_path), doc)
+    if fmt == "json":
+        print(json.dumps(result, indent=2))
+        return 0
+
+    lines = ["# reconciler benchmark", "", result["headline"], "", result["reading"], "",
+             f"- **independent recovery** (the quotable number): "
+             f"{result['n_recovered_independent']}/{result['n_hand_tagged']} "
+             f"(rate={result['independent_recovery_rate']})",
+             f"- **raw recovery** (NOT a capability number): "
+             f"{result['n_recovered']}/{result['n_hand_tagged']} "
+             f"(rate={result['recovery_rate']})",
+             f"- **trailer provenance across the whole history**: "
+             f"{result['trailer_provenance']}", ""]
+    for d in result["detail"]:
+        if not d["recovered"]:
+            lines.append(f"  - [MISS] {d['idea_id']}: expected={d['expected']} "
+                         f"got={d['got']}")
+        else:
+            lines.append(f"  - [{d['provenance'].upper()}] {d['idea_id']}: "
+                         f"recovered from {(d['evidence_sha'] or '?')[:10]}")
+    print("\n".join(lines))
+    return 0
+
+
 def _render(ledger: dict, fmt: str) -> str:
     if fmt == "json":
         return json.dumps(ledger, indent=2)
@@ -249,6 +287,13 @@ def main(argv=None) -> int:
     h.add_argument("--force", action="store_true",
                    help="replace a hook this tool did not write")
 
+    b = sub.add_parser("benchmark",
+                       help="how much recovered landing came from a trailer written "
+                            "independently of the pile — the honest recall number")
+    b.add_argument("--repo", required=True)
+    b.add_argument("--doc", required=True)
+    b.add_argument("--format", default="markdown", choices=("markdown", "json"), dest="fmt")
+
     args = p.parse_args(argv)
     if args.cmd == "run":
         return run(args.repo, args.doc, args.fmt, args.validate)
@@ -256,6 +301,8 @@ def main(argv=None) -> int:
         return cmd_id(args.repo, args.doc, args.num, args.grep, args.status)
     if args.cmd == "verify":
         return cmd_verify(args.repo, args.doc, args.fmt)
+    if args.cmd == "benchmark":
+        return cmd_benchmark(args.repo, args.doc, args.fmt)
     if args.cmd == "install-hook":
         return cmd_install_hook(args.repo, args.force)
     return 2

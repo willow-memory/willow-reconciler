@@ -123,7 +123,8 @@ def test_verify_resolves_the_real_trailers(corpus_run):
     items, _, gitlog, _ = corpus_run
     result = verify_trailers("docs/ideas.md", "corpus", items, gitlog)
     assert set(result["distinct_items_covered"]) == {
-        "willow-ideas-007", "willow-ideas-008", "willow-ideas-014"}
+        "willow-ideas-007", "willow-ideas-008",
+        "willow-ideas-014", "willow-ideas-015"}
 
 
 def test_verify_does_not_see_the_abandoned_branchs_trailer(corpus_run):
@@ -176,3 +177,51 @@ def test_every_inferred_verdict_traces_to_a_resolvable_signal(corpus_run):
         if v.evidence_kind == INFERRED:
             assert ("trailer" in v.evidence or "git history shows it merged" in v.evidence), (
                 f"item {v.num} inferred from unrecognised evidence: {v.evidence}")
+
+
+# --- the capability benchmark (item 25) -----------------------------------
+
+def test_benchmark_separates_independent_from_self_witnessed(corpus, corpus_run):
+    """The whole point: item 14's trailer was written by a commit that never
+    touched the pile; item 15's was written by the commit that added its tag.
+    Both recover under the hold-out, and only one of them is evidence."""
+    from fixtures.corpus import EXPECTED_PROVENANCE
+    from reconciler.benchmark import benchmark
+
+    items, _, gitlog, _ = corpus_run
+    result = benchmark(items, gitlog, str(corpus), "docs/ideas.md")
+    got = {d["num"]: d["provenance"] for d in result["detail"] if d["recovered"]}
+    assert got == EXPECTED_PROVENANCE
+
+
+def test_independent_rate_is_lower_than_raw_recovery(corpus, corpus_run):
+    """The number that must not be quoted, and the one that may."""
+    from reconciler.benchmark import benchmark
+
+    items, _, gitlog, _ = corpus_run
+    result = benchmark(items, gitlog, str(corpus), "docs/ideas.md")
+    assert result["n_recovered"] == 2
+    assert result["n_recovered_independent"] == 1
+    assert result["n_recovered_self_witnessed"] == 1
+    assert result["independent_recovery_rate"] < result["recovery_rate"]
+
+
+def test_corpus_provenance_counts_every_trailer(corpus, corpus_run):
+    from reconciler.benchmark import benchmark
+
+    items, _, gitlog, _ = corpus_run
+    prov = benchmark(items, gitlog, str(corpus), "docs/ideas.md")["trailer_provenance"]
+    # 007, 008, 014 and the dangling 404 never touch the doc; 015 does.
+    assert prov == {"independent": 4, "self_witnessed": 1}
+
+
+def test_a_tag_with_no_trailer_at_all_is_not_credited(corpus, corpus_run):
+    from reconciler.benchmark import benchmark
+
+    items, _, gitlog, _ = corpus_run
+    result = benchmark(items, gitlog, str(corpus), "docs/ideas.md")
+    unrecovered = {d["num"] for d in result["detail"] if not d["recovered"]}
+    assert unrecovered == {1, 2, 12}
+    for d in result["detail"]:
+        if not d["recovered"]:
+            assert d["provenance"] is None
