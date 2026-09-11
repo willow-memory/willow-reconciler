@@ -30,8 +30,7 @@ from pathlib import Path
 
 MARKER = "# installed by `reconciler install-hook` (willow-reconciler)"
 
-PREPARE_COMMIT_MSG = f"""#!/bin/sh
-{MARKER}
+PREPARE_COMMIT_MSG = "#!/bin/sh\n" + MARKER + "\n" + r"""
 # Adds an `Idea-Id` trailer when the branch name names an idea number, e.g.
 #   idea-24  |  ideas-024  |  feature/idea_24-anchor-tags   ->  willow-ideas-024
 # Does nothing when: the message already has a trailer, the branch does not
@@ -53,13 +52,14 @@ fi
 branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) || exit 0
 [ -n "$branch" ] || exit 0
 
-# Every idea number the branch names. The old single greedy sed took the LAST
-# one, so `idea-42-followup-to-idea-7` wrote a well-formed trailer for item 7 —
-# a confidently wrong, permanent join key that `verify` cannot flag, because it
+# Every idea number the branch names. A single greedy sed took the LAST one,
+# so `idea-42-followup-to-idea-7` wrote a well-formed trailer for item 7 — a
+# confidently wrong, permanent join key that `verify` cannot flag, because it
 # resolves. Two numbers means the branch is ambiguous about what it lands, and
 # guessing is the one thing this convention must never do (`reconciler id`
-# refuses an ambiguous --grep for the same reason).
-nums=$(printf '%s\\n' "$branch" | grep -oi 'idea[s]*[-_/][0-9][0-9]*' \\
+# refuses an ambiguous --grep for the same reason). Leading zeros are stripped
+# before printf, which may otherwise read `024` as octal.
+nums=$(printf '%s\n' "$branch" | grep -oi 'idea[s]*[-_/][0-9][0-9]*' \
          | grep -o '[0-9][0-9]*$' | sed 's/^0*//' | grep -v '^$' | sort -u)
 count=$(printf '%s' "$nums" | grep -c '^[0-9]' || true)
 
@@ -83,33 +83,58 @@ id=$(printf 'willow-ideas-%03d' "$nums")
 # interpret-trailers keeps the trailer inside the existing trailer block
 # (alongside Co-Authored-By) rather than starting a new paragraph after it.
 if ! git interpret-trailers --in-place --trailer "Idea-Id: $id" "$msg_file" 2>/dev/null; then
-  printf '\\nIdea-Id: %s\\n' "$id" >> "$msg_file"
+  printf '\nIdea-Id: %s\n' "$id" >> "$msg_file"
 fi
 """
 
-COMMIT_MSG = f"""#!/bin/sh
-{MARKER}
+COMMIT_MSG = "#!/bin/sh\n" + MARKER + "\n" + r"""
 # Rejects a malformed `Idea-Id` trailer. The id shape is fixed at
-# `willow-ideas-NNN` (3 digits, zero-padded) by reconciler/ids.py; anything
-# else can never resolve against a doc, and rule 2a would still rank it as the
-# strongest evidence the classifier has. Cheaper to catch here than to find a
-# dangling key in `reconciler verify` months later.
+# `willow-ideas-NNN` (at least 3 digits, zero-padded) by reconciler/ids.py;
+# anything else can never resolve against a doc, and rule 2a would still rank
+# it as the strongest evidence the classifier has. Cheaper to catch here than
+# to find a dangling key in `reconciler verify` months later.
 set -e
 msg_file="$1"
 
-# 3 digits is a MINIMUM, not a maximum: reconciler/ids.py pads to a fixed
-# width of 3 precisely so an id stays correct once the doc passes #999, and a
-# validator capping at 3 would make every item from #1000 on uncommittable.
-bad=$(grep -i '^Idea-Id:' "$msg_file" | grep -cv '^Idea-Id: willow-ideas-[0-9][0-9][0-9][0-9]*$' || true)
+# Validate only the TRAILER BLOCK — the run of paragraphs at the end whose
+# every line is `Key: value` shaped. A message that merely DISCUSSES the
+# convention ("Idea-Status: partial means ...") is prose, not a claim, and
+# rejecting it was this validator making the same mention-is-not-evidence
+# mistake the classifier was twice audited for. Comments go first; git strips
+# them from the final message anyway.
+trailers=$(grep -v '^#' "$msg_file" | awk '
+  { lines[NR] = $0 }
+  END {
+    n = NR
+    while (n > 0 && lines[n] ~ /^[ \t]*$/) n--
+    start = n + 1
+    while (n > 0) {
+      p = n
+      while (p > 1 && lines[p-1] !~ /^[ \t]*$/) p--
+      ok = 1
+      for (i = p; i <= n; i++)
+        if (lines[i] !~ /^[A-Za-z][A-Za-z0-9-]*:[ \t]/) ok = 0
+      if (!ok) break
+      start = p
+      n = p - 1
+      while (n > 0 && lines[n] ~ /^[ \t]*$/) n--
+    }
+    for (i = start; i <= NR; i++) if (lines[i] !~ /^[ \t]*$/) print lines[i]
+  }')
+
+bad=$(printf '%s\n' "$trailers" | grep -i '^Idea-Id:' \
+        | grep -cv '^Idea-Id: willow-ideas-[0-9][0-9][0-9][0-9]*$' || true)
 if [ "$bad" -gt 0 ]; then
   echo "commit-msg: malformed Idea-Id trailer." >&2
-  grep -i '^Idea-Id:' "$msg_file" | grep -v '^Idea-Id: willow-ideas-[0-9][0-9][0-9][0-9]*$' >&2
+  printf '%s\n' "$trailers" | grep -i '^Idea-Id:' \
+    | grep -v '^Idea-Id: willow-ideas-[0-9][0-9][0-9][0-9]*$' >&2
   echo "expected: Idea-Id: willow-ideas-NNN   (at least 3 digits, zero-padded)" >&2
   echo "get the right line with: reconciler id --repo R --doc D --num N" >&2
   exit 1
 fi
 
-bad_status=$(grep -i '^Idea-Status:' "$msg_file" | grep -cv '^Idea-Status: \\(landed\\|partial\\)$' || true)
+bad_status=$(printf '%s\n' "$trailers" | grep -i '^Idea-Status:' \
+               | grep -cv '^Idea-Status: \(landed\|partial\)$' || true)
 if [ "$bad_status" -gt 0 ]; then
   echo "commit-msg: Idea-Status must be exactly 'landed' or 'partial'." >&2
   exit 1

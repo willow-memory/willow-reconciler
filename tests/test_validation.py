@@ -5,8 +5,11 @@ read). The real test here is the hold-out: strip each hand-tagged item's own
 legend tag, reclassify with only the inferred/not_started tiers, and compare
 against the human label the tag used to carry.
 
-Runs against the REAL willow-mcp/docs/ideas.md — skipped if that sibling
-repo is not present in this checkout.
+Runs against the REAL willow-mcp/docs/ideas.md, which exists only in a full
+fleet checkout — so these skip on a CI runner and always have. They are a
+SUPPLEMENT, not the coverage: `tests/test_corpus.py` asserts the same
+behaviours against the in-repo adversarial corpus and runs everywhere. What
+these add is the one thing a fixture cannot fake — the real doc's real shape.
 """
 import pathlib
 
@@ -25,7 +28,8 @@ IDEAS_DOC = FLEET_ROOT / "willow-mcp" / "docs" / "ideas.md"
 @pytest.fixture
 def real_run():
     if not IDEAS_DOC.exists():
-        pytest.skip("willow-mcp sibling repo not present in this checkout")
+        pytest.skip("willow-mcp sibling absent; test_corpus.py covers this "
+                    "behaviour against the in-repo fixture")
     text = IDEAS_DOC.read_text(encoding="utf-8")
     items, dropped = parse_doc(text)
     gitlog = GitLog.load(str(FLEET_ROOT / "willow-mcp"))

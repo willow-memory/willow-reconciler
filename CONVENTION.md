@@ -42,6 +42,11 @@ a branch name that names an idea number (`idea-42`, `ideas-042`,
 fires only when the branch already carries the number, and it never overwrites
 a trailer written by hand.
 
+Trailers are read from the **trailer block** only — the run of paragraphs at
+the end of the message whose every line is `Key: value` shaped. A commit that
+discusses the convention in prose does not carry it, and a revert quoting an
+original message does not inherit its claims.
+
 A commit may carry several `Idea-Id` trailers when it lands several ideas.
 `Idea-Status` is commit-level, so a commit saying `partial` says it about
 every id it names.

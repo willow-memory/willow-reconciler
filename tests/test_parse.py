@@ -54,7 +54,8 @@ def test_real_doc_yields_expected_item_count():
     if not doc.exists():
         import pytest
 
-        pytest.skip("willow-mcp sibling repo not present in this checkout")
+        pytest.skip("willow-mcp sibling absent; test_corpus.py covers parse "
+                    "hygiene against the in-repo fixture")
     items, dropped = parse_doc(doc.read_text(encoding="utf-8"))
     assert len(items) == 111
     assert dropped == 0

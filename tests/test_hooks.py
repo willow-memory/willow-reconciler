@@ -197,3 +197,32 @@ def test_hooks_are_installed_where_core_hookspath_points(repo):
     _run(["git", "checkout", "-qb", "idea-88-hookspath"], repo)
     _commit(repo, "a.txt", "feat: should get a trailer")
     assert "Idea-Id: willow-ideas-088" in _last_message(repo)
+
+
+def test_prose_discussing_the_convention_is_not_rejected(repo):
+    """The validator read `Idea-Status:` anywhere in the message, so a commit
+    EXPLAINING the convention was rejected as carrying a malformed trailer —
+    this repo's own tooling blocked its own commit that way. A mention is not
+    a claim, here as everywhere else."""
+    install_hooks(repo)
+    _run(["git", "checkout", "-qb", "docs-work"], repo)
+    proc = _commit(repo, "a.txt",
+                   "docs: explain the convention\n\n"
+                   "Alongside them sit the controls — a resolving trailer, an\n"
+                   "Idea-Status: partial — because a precision fix that simply\n"
+                   "disables a rule should fail too.\n\n"
+                   "Co-Authored-By: Someone <s@example.com>",
+                   check=False)
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_a_malformed_trailer_in_the_real_trailer_block_is_still_rejected(repo):
+    install_hooks(repo)
+    _run(["git", "checkout", "-qb", "real-work"], repo)
+    _commit(repo, "a.txt", "chore: first")
+    proc = _commit(repo, "b.txt",
+                   "feat: y\n\nsome prose.\n\nIdea-Id: willow-ideas-7\n\n"
+                   "Co-Authored-By: Someone <s@example.com>",
+                   check=False)
+    assert proc.returncode == 1
+    assert "malformed Idea-Id trailer" in proc.stderr

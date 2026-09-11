@@ -28,6 +28,9 @@ from dataclasses import dataclass, field
 _SEP = "\x01"        # field separator inside one commit's record
 _END = "\x02"        # record separator between commits
 
+# A `Key: value` line — the shape git itself recognises as a trailer.
+_TRAILER_LINE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9-]*:[ \t]")
+
 _IDEA_ID_TRAILER_RE = re.compile(r"(?im)^Idea-Id:\s*(willow-ideas-\S+)\s*$")
 _IDEA_STATUS_TRAILER_RE = re.compile(r"(?im)^Idea-Status:\s*(landed|partial)\s*$")
 
@@ -60,6 +63,35 @@ _MERGE_COMMIT_RE = re.compile(r"^Merge pull request #(\d+)\b")
 # `Idea-Id` trailer (rule 2a), which is the durable key anyway.
 
 
+def trailer_block(text: str) -> str:
+    """The message's trailer block: the run of paragraphs at the END whose
+    every line is `Key: value` shaped.
+
+    Trailers were previously matched anywhere in the message, which made a
+    commit that DISCUSSES the convention indistinguishable from one that
+    CARRIES it — a commit body explaining `Idea-Status: partial`, or a revert
+    quoting the original message, read as real evidence. That is the
+    mention-is-not-evidence error a third time, now in the evidence layer;
+    this repo's own tooling caught it by rejecting a commit whose prose
+    happened to start a line that way.
+
+    git proper counts only the final paragraph, but the convention's own
+    commits put `Idea-Id` in a paragraph above the `Co-Authored-By` block, so
+    that rule would discard every trailer written so far. Walking back over
+    consecutive all-trailer-shaped paragraphs accepts both shapes and still
+    stops dead at the first line of prose."""
+    paragraphs = re.split(r"\n[ \t]*\n", text)
+    kept: list[str] = []
+    for para in reversed(paragraphs):
+        lines = [ln for ln in para.splitlines() if ln.strip()]
+        if not lines:
+            continue
+        if not all(_TRAILER_LINE_RE.match(ln) for ln in lines):
+            break
+        kept.insert(0, "\n".join(lines))
+    return "\n".join(kept)
+
+
 @dataclass(frozen=True)
 class Commit:
     sha: str
@@ -76,6 +108,12 @@ class Commit:
     @property
     def full_text(self) -> str:
         return f"{self.subject}\n{self.body}"
+
+    @property
+    def trailers(self) -> str:
+        """Only the trailer block — what the commit CLAIMS, not what it
+        mentions. Every trailer lookup reads this, never `full_text`."""
+        return trailer_block(self.body)
 
 
 @dataclass(frozen=True)
@@ -156,9 +194,9 @@ class GitLog:
             # finditer, not search: one commit may land several ideas and
             # carry a trailer for each. `search` would see only the first,
             # silently costing every later id its highest-confidence evidence.
-            for m in _IDEA_ID_TRAILER_RE.finditer(c.full_text):
+            for m in _IDEA_ID_TRAILER_RE.finditer(c.trailers):
                 if m.group(1) == idea_id:
-                    status_m = _IDEA_STATUS_TRAILER_RE.search(c.full_text)
+                    status_m = _IDEA_STATUS_TRAILER_RE.search(c.trailers)
                     status = status_m.group(1).lower() if status_m else "landed"
                     return c, status
         return None
@@ -197,13 +235,13 @@ class GitLog:
         plausible-looking dead one."""
         out: list[tuple[Commit, str, str]] = []
         for c in self.commits:
-            status_m = _IDEA_STATUS_TRAILER_RE.search(c.full_text)
+            status_m = _IDEA_STATUS_TRAILER_RE.search(c.trailers)
             # `Idea-Status` is commit-level: a commit that lands several ideas
             # partially is saying so about all of them. Splitting status per id
             # would need a richer trailer shape than the convention defines.
             status = status_m.group(1).lower() if status_m else "landed"
             seen: set[str] = set()
-            for m in _IDEA_ID_TRAILER_RE.finditer(c.full_text):
+            for m in _IDEA_ID_TRAILER_RE.finditer(c.trailers):
                 # One commit repeating the same id is one claim, not two —
                 # counting it twice would inflate `verify`'s totals.
                 if m.group(1) in seen:
