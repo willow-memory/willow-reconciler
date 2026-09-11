@@ -1,0 +1,64 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mint a willow-ci installation token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.WILLOW_CI_APP_ID }}
+          private-key: ${{ secrets.WILLOW_CI_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ steps.app-token.outputs.token }}
+
+      - uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Arm auto-merge on the release PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          pr=$(gh pr list --repo "$REPO" --state open --json number,headRefName \
+                 --jq '[.[] | select(.headRefName | startswith("release-please--"))]
+                       | first | .number // empty')
+          if [ -z "$pr" ]; then
+            echo "No open release PR — nothing releasable since the last tag."
+            exit 0
+          fi
+          # Arming can fail for reasons that are not this job's fault (most
+          # commonly: the default branch has no required status checks, so
+          # GitHub refuses enablePullRequestAutoMerge). That must not fail the
+          # release-please job — but it must not be silent either. A bare
+          # `|| true` hid exactly this for six releases, during which every
+          # release PR merged immediately and published to PyPI before CI ran.
+          if ! out=$(gh pr merge --auto --merge "$pr" --repo "$REPO" 2>&1); then
+            echo "::warning::could not arm auto-merge on PR #${pr}: ${out}"
+            echo "::warning::the release PR is open and must be merged by hand"
+          else
+            echo "auto-merge armed on PR #${pr}"
+          fi
