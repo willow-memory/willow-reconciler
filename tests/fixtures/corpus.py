@@ -37,14 +37,25 @@ EXPECTED: dict[int, tuple[str, str]] = {
     11: (NOT_STARTED, NONE_KIND),   # marker mid-prose
     12: (LANDED, EXPLICIT),         # leading marker, no keyword
     14: (LANDED, EXPLICIT),         # tagged; also trailered, for the hold-out
+    15: (LANDED, EXPLICIT),         # tagged BY its own trailer commit
 }
 
 # Items whose legend tag, once stripped, IS recoverable from real evidence.
 # Everything else hand-tagged must fall to not_started — abstain, never a guess.
-HOLDOUT_RECOVERABLE = {14}
+HOLDOUT_RECOVERABLE = {14, 15}
 
 # An id no item in the doc carries, so `verify` has something to catch.
 DANGLING_ID = "willow-ideas-404"
+
+# Appended to the doc by the SAME commit that claims its id — the shape that
+# makes a recovery self-witnessed rather than independent. Item 14's trailer,
+# by contrast, is written by a commit that never touches the pile.
+SELF_WITNESSED_ITEM = (
+    "15. tagged by the very commit that claims it — ✅ **shipped**: so the "
+    "benchmark has a self-witnessed recovery to tell apart from a real one.\n")
+
+# num -> provenance of the evidence that recovers it once its tag is stripped.
+EXPECTED_PROVENANCE = {14: "independent", 15: "self_witnessed"}
 
 
 def _git(repo: pathlib.Path, *args: str) -> None:
@@ -83,6 +94,14 @@ def build_corpus(dest: pathlib.Path) -> pathlib.Path:
     _commit(dest, "item8.py",
             "feat: half-land item 8\n\nIdea-Id: willow-ideas-008\nIdea-Status: partial")
     _commit(dest, "item14.py", "feat: land item 14\n\nIdea-Id: willow-ideas-014")
+
+    # The self-witnessed case: one commit both appends the item to the pile and
+    # claims its id, so the tag and the key were authored in a single act.
+    doc = dest / DOC_RELPATH
+    doc.write_text(doc.read_text(encoding="utf-8") + SELF_WITNESSED_ITEM, encoding="utf-8")
+    _git(dest, "add", DOC_RELPATH)
+    _git(dest, "commit", "-q", "-m",
+         "feat: land item 15 and tag it\n\nIdea-Id: willow-ideas-015")
 
     # For `verify`: a trailer naming an item the doc does not contain.
     _commit(dest, "dangling.txt", f"chore: typo'd key\n\nIdea-Id: {DANGLING_ID}")

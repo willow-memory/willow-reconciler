@@ -93,6 +93,9 @@ only ever call `git log`.
   / `reading` result-shape, keeping the explicit/inferred split visible.
 - **validate** — Slice 0's acceptance test as a library function: the trivial
   echo check plus the real hold-out score.
+- **benchmark** — splits recovered items by whether their trailer was written
+  independently of the pile, so a self-fulfilling score cannot be quoted as
+  recall.
 - **emit** — resolve which item a commit is landing (by number or text) and
   render its trailer line. A doc-side convenience only: it never reaches
   `classify`, so a loose match costs an ambiguity error, never a false verdict.
@@ -102,6 +105,27 @@ only ever call `git log`.
 - **hooks** — the `prepare-commit-msg` / `commit-msg` shell hooks and their
   installer; the one place this tool writes outside its own repo.
 - **cli** — `run`, `id`, `verify`, `install-hook`.
+
+## What the numbers mean
+
+`reconciler benchmark` answers the question the hold-out score cannot:
+
+```sh
+reconciler benchmark --repo willow-mcp --doc docs/ideas.md
+```
+
+A trailer written by the same commit that added the doc's own tag is
+**self-witnessed** — the author had both facts in hand and wrote them
+together, so recovering one from the other demonstrates the pipeline and
+nothing about recall. A trailer written by a commit that never touched the
+pile is **independent**: the key came from someone landing work, the tag from
+someone curating, as two separate acts.
+
+Only `independent_recovery_rate` may be quoted as a capability result. On this
+repo today it is **0.0** against a raw recovery of 0.9 — every trailer here was
+written alongside the tag it recovers. That is the expected shape for a
+convention that has been demonstrated but not yet lived in, and the fix is
+time, not code.
 
 ## The adversarial corpus
 
