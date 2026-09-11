@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Conventional Commits](https://www.conventionalcommits.org/) and this file is
 maintained by [release-please](https://github.com/googleapis/release-please).
 
+## [0.4.0](https://github.com/willow-memory/willow-reconciler/compare/v0.3.0...v0.4.0) (2026-09-11)
+
+
+### Added
+
+* surface which rule fired on each verdict ([de8dee9](https://github.com/willow-memory/willow-reconciler/commit/de8dee978b73285998df635246f7213e705fdac6))
+
+
+### Fixed
+
+* **cli:** classify the --doc read failure instead of echoing the OSError ([663b3e7](https://github.com/willow-memory/willow-reconciler/commit/663b3e7e82d41ccd1d7f9753687839b54b8aac7e))
+* never let git's raw stderr reach an emitted verdict ([eacfa6d](https://github.com/willow-memory/willow-reconciler/commit/eacfa6dcaeceadffa15af9f382348ca367a6a7b0))
+
 ## [0.3.0](https://github.com/willow-memory/willow-reconciler/compare/v0.2.0...v0.3.0) (2026-09-11)
 
 
