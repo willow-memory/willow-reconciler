@@ -103,6 +103,41 @@ def test_unavailable_on_non_git_directory(tmp_path):
     assert gitlog.error
 
 
+def test_error_is_a_closed_vocabulary_phrase_not_raw_git_stderr(tmp_path):
+    """`GitLog.error` is spliced into an emitted verdict/headline (see
+    classify.py, verify.py), so it must never carry git's raw stderr — which
+    routinely includes the absolute path this tool was pointed at. Route it
+    through failure_classes.classify() instead."""
+    from reconciler.failure_classes import FAILURE_CLASSES
+
+    not_a_repo = tmp_path / "definitely-not-a-git-repo"
+    not_a_repo.mkdir()
+    gitlog = GitLog.load(str(not_a_repo))
+    assert gitlog.available is False
+    assert gitlog.error in FAILURE_CLASSES
+    # the absolute path git's own fatal message would have echoed must not
+    # survive into the stored error
+    assert str(not_a_repo) not in gitlog.error
+
+
+def test_error_on_a_missing_git_binary_is_classified_not_raw(monkeypatch, tmp_path):
+    """The OSError path (git not installed / not on PATH): `str(e)` is a
+    caught exception's raw text and must be classified the same way as
+    stderr, never stored verbatim."""
+    import subprocess as subprocess_mod
+
+    from reconciler.failure_classes import FAILURE_CLASSES
+
+    def _raise(*args, **kwargs):
+        raise FileNotFoundError(2, "No such file or directory", "git")
+
+    monkeypatch.setattr(subprocess_mod, "run", _raise)
+    gitlog = GitLog.load(str(tmp_path))
+    assert gitlog.available is False
+    assert gitlog.error in FAILURE_CLASSES
+    assert gitlog.error == "the git binary is missing"
+
+
 def test_all_idea_trailers_reports_what_the_commits_claim(repo_factory):
     """The inverse of find_idea_trailer: not "does this item have evidence?"
     but "what do the commits say?" — which is what catches a dangling key."""
