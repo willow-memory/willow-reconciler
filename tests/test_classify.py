@@ -5,6 +5,10 @@ from reconciler.classify import (
     NONE_KIND,
     NOT_STARTED,
     PARTIAL,
+    RULE_ABSTAIN,
+    RULE_EXPLICIT_TAG,
+    RULE_IDEA_ID_TRAILER,
+    RULE_MERGED_PR_MENTION,
     classify_item,
 )
 from reconciler.gitevidence import Commit, GitLog
@@ -214,3 +218,76 @@ def test_a_tag_with_no_space_before_the_dash_is_still_found():
     costs `validate.py`'s hold-out an item of ground truth."""
     v = classify_item("willow-ideas-034", 34, "an idea–✅ shipped in v0.1.0", EMPTY_GITLOG)
     assert v.status == LANDED
+
+
+# --- rule provenance (Task 2: additive reporting, no behaviour change) -----
+# Identifiers must match the module docstring's numbering exactly: 1 (explicit
+# tag), 2a (Idea-Id trailer), 2b (merged-PR mention), 3 (abstain).
+
+def test_rule_1_on_an_explicit_tag():
+    v = classify_item("willow-ideas-001", 1, "✅ shipped in v0.1.0", EMPTY_GITLOG)
+    assert v.rule == RULE_EXPLICIT_TAG == "1"
+
+
+def test_rule_2a_on_an_idea_id_trailer():
+    commits = (Commit(sha="b" * 40, subject="feat: build the thing",
+                      body="Idea-Id: willow-ideas-010\n"),)
+    gitlog = GitLog(repo_path="/x", commits=commits, available=True)
+    v = classify_item("willow-ideas-010", 10, "no tag here", gitlog)
+    assert v.rule == RULE_IDEA_ID_TRAILER == "2a"
+
+
+def test_rule_2b_on_a_merged_pr_mention():
+    commits = (Commit(sha="c" * 40, subject="Merge pull request #456 from x/y",
+                      body="", parents=("a" * 40, "b" * 40)),)
+    gitlog = GitLog(repo_path="/x", commits=commits, available=True)
+    v = classify_item("willow-ideas-011", 11, "names PR #456 directly", gitlog)
+    assert v.rule == RULE_MERGED_PR_MENTION == "2b"
+
+
+def test_rule_3_on_abstain():
+    v = classify_item("willow-ideas-015", 15, "just an idea, no signal", EMPTY_GITLOG)
+    assert v.rule == RULE_ABSTAIN == "3"
+
+
+def test_explicit_tag_wins_over_inferred_evidence_and_reports_rule_1():
+    """rule 1 still outranks rule 2, and now visibly says so."""
+    commits = (Commit(sha="a" * 40, subject="feat", body="Idea-Id: willow-ideas-003"),)
+    gitlog = GitLog(repo_path="/x", commits=commits, available=True)
+    v = classify_item("willow-ideas-003", 3, "**idea** — ✅ **shipped**: done.", gitlog)
+    assert v.rule == RULE_EXPLICIT_TAG
+
+
+def test_rule_provenance_is_additive_only_status_and_kind_unchanged():
+    """This is the behaviour-preservation proof: for a fixed battery of
+    inputs spanning every branch of the rule stack, adding `rule` must not
+    move `status` or `evidence_kind` — only add information alongside them."""
+    idea_trailer_gitlog = GitLog(
+        repo_path="/x",
+        commits=(Commit(sha="b" * 40, subject="feat: build the thing",
+                        body="Idea-Id: willow-ideas-010\n"),),
+        available=True)
+    merged_pr_gitlog = GitLog(
+        repo_path="/x",
+        commits=(Commit(sha="c" * 40, subject="Merge pull request #456 from x/y",
+                        body="", parents=("a" * 40, "b" * 40)),),
+        available=True)
+
+    cases = [
+        ("willow-ideas-001", "✅ shipped in v0.1.0", EMPTY_GITLOG,
+         LANDED, EXPLICIT, RULE_EXPLICIT_TAG),
+        ("willow-ideas-002", "🟡 **partial**: half done", EMPTY_GITLOG,
+         PARTIAL, EXPLICIT, RULE_EXPLICIT_TAG),
+        ("willow-ideas-010", "no tag here", idea_trailer_gitlog,
+         LANDED, INFERRED, RULE_IDEA_ID_TRAILER),
+        ("willow-ideas-011", "names PR #456 directly", merged_pr_gitlog,
+         LANDED, INFERRED, RULE_MERGED_PR_MENTION),
+        ("willow-ideas-015", "just an idea, no signal", EMPTY_GITLOG,
+         NOT_STARTED, NONE_KIND, RULE_ABSTAIN),
+    ]
+    for num, (idea_id, text, gitlog, expected_status, expected_kind,
+             expected_rule) in enumerate(cases):
+        v = classify_item(idea_id, num, text, gitlog)
+        assert v.status == expected_status, text
+        assert v.evidence_kind == expected_kind, text
+        assert v.rule == expected_rule, text

@@ -231,6 +231,13 @@ def _render(ledger: dict, fmt: str) -> str:
     if ledger["duplicate_nums"]:
         lines.append(f"- **duplicate item numbers** (surfaced, not resolved): "
                      f"{ledger['duplicate_nums']}")
+    lines += ["", "## items", "",
+             "Each item names the rule that fired (see classify.py's docstring: "
+             "1 = explicit legend tag, 2a = Idea-Id trailer, 2b = merged-PR mention, "
+             "3 = abstain) so a verdict is inspectable without reading the source."]
+    for row in ledger["items"]:
+        lines.append(f"- `{row['idea_id']}` **{row['status']}** (rule {row['rule']}, "
+                     f"{row['evidence_kind']}): {row['evidence']}")
     if "validation" in ledger:
         ec = ledger["validation"]["echo_check"]
         ho = ledger["validation"]["holdout"]
