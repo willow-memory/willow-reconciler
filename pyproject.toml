@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 # script both stay `reconciler` — same three-names split as corpus-lens
 # (see corpus-lens/pyproject.toml).
 name = "willow-reconciler"
-version = "0.2.0"
+version = "0.3.0"
 description = "Deterministic idea-to-landing reconciler: reads the fleet's own records and reports how much of what was proposed has actually landed."
 license = { text = "Apache-2.0" }
 authors = [{ name = "Sean Campbell" }]

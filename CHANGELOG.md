@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Conventional Commits](https://www.conventionalcommits.org/) and this file is
 maintained by [release-please](https://github.com/googleapis/release-please).
 
+## [0.3.0](https://github.com/willow-memory/willow-reconciler/compare/v0.2.0...v0.3.0) (2026-09-11)
+
+
+### Added
+
+* add reconciler benchmark, the honest recall number ([add64a9](https://github.com/willow-memory/willow-reconciler/commit/add64a93f4378dc64cdc6f47287d30355811ef15))
+* add reconciler benchmark, the honest recall number ([12104dd](https://github.com/willow-memory/willow-reconciler/commit/12104dd81da0d1ebca937812ad281770d0ba67d4))
+
 ## [0.2.0](https://github.com/willow-memory/willow-reconciler/compare/v0.1.0...v0.2.0) (2026-09-11)
 
 
