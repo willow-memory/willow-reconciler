@@ -78,3 +78,12 @@ trailer) and grows useful as trailers accumulate.
 
 See [`CONVENTION.md`](CONVENTION.md) for the `Idea-Id` trailer convention and
 what counts as landing evidence.
+
+## Where this goes next
+
+[`docs/ideas.md`](docs/ideas.md) is this repo's own idea pile, written in the
+shape the reconciler reads — so it doubles as a dogfooding fixture:
+
+```sh
+reconciler run --repo willow-reconciler --doc docs/ideas.md
+```
