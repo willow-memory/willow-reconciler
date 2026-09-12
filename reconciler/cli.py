@@ -5,6 +5,7 @@
     reconciler verify --repo willow-mcp --doc docs/ideas.md [--format markdown|json]
     reconciler install-hook --repo willow-mcp [--force]
     reconciler benchmark --repo willow-mcp --doc docs/ideas.md [--format markdown|json]
+    reconciler fleet --repo willow-mcp --repo willow-reconciler [--doc docs/ideas.md] [--format markdown|json]
 
 `run` and `verify` are read-only (`git log` only). `install-hook` is the one
 verb that writes into the target repo, which is why it is a verb and not a
@@ -46,6 +47,7 @@ from .benchmark import benchmark
 from .classify import classify_item
 from .emit import VALID_STATUSES, find_items, trailer_block
 from .failure_classes import classify_file
+from .fleet import DOC_OK, build_fleet
 from .gitevidence import GitLog
 from .hooks import install_hooks
 from .ids import idea_id
@@ -348,6 +350,66 @@ def _render(ledger: dict, fmt: str) -> str:
     return "\n".join(lines)
 
 
+def cmd_fleet(repos: list[str], doc: str = "docs/ideas.md", fmt: str = "markdown",
+             fleet_root: Path | None = None) -> int:
+    """One table across many repos. Each `--repo` is resolved exactly as
+    `run`'s is (path or bare name — see the module docstring); a repo that
+    fails to resolve at all still aborts the command the way `run` does
+    (there is no repo to read anything from), but a repo that resolves and
+    simply has no readable doc becomes a `doc_status: "missing"` row rather
+    than aborting the rest of the fleet — see `fleet.py`."""
+    resolved: list[tuple[str, Path]] = []
+    for repo in repos:
+        repo_path, candidates = _resolve_repo(repo, fleet_root)
+        if repo_path is None:
+            print(_repo_not_found_error(repo, candidates), file=sys.stderr)
+            return 2
+        resolved.append((repo, repo_path))
+
+    result = build_fleet(resolved, doc)
+    if fmt == "json":
+        print(json.dumps(result, indent=2))
+        return 0
+    print(_render_fleet(result))
+    return 0
+
+
+_FLEET_COLUMNS = ("items", "dropped", "explicit landed", "explicit partial",
+                  "inferred landed", "inferred partial", "none",
+                  "independent", "raw")
+
+
+def _fleet_row_cells(row: dict) -> tuple[str, ...]:
+    if row["doc_status"] != DOC_OK:
+        return (f"doc: missing ({row['doc_error']})",) + ("—",) * (len(_FLEET_COLUMNS) - 1)
+    return (str(row["items_parsed"]), str(row["dropped"]), str(row["explicit_landed"]),
+            str(row["explicit_partial"]), str(row["inferred_landed"]),
+            str(row["inferred_partial"]), str(row["none"]),
+            str(row["independent_recovery_rate"]), str(row["recovery_rate"]))
+
+
+def _render_fleet(result: dict) -> str:
+    t = result["totals"]
+    lines = ["# reconciler fleet", "",
+             f"- **doc**: {result['doc']} (checked in every repo listed below)",
+             f"- **repos**: {len(result['rows'])} ({t['repos_ok']} readable, "
+             f"{t['repos_doc_missing']} with `doc: missing`)",
+             "",
+             "| repo | " + " | ".join(_FLEET_COLUMNS) + " |",
+             "|" + "---|" * (len(_FLEET_COLUMNS) + 1)]
+    for row in result["rows"]:
+        lines.append(f"| {row['repo']} | " + " | ".join(_fleet_row_cells(row)) + " |")
+    lines.append(
+        f"| **totals (pooled)** | {t['items_parsed']} | {t['dropped']} | "
+        f"{t['explicit_landed']} | {t['explicit_partial']} | {t['inferred_landed']} | "
+        f"{t['inferred_partial']} | {t['none']} | {t['pooled_independent_recovery_rate']} | "
+        f"{t['pooled_recovery_rate']} |")
+    lines += ["", "## reading", ""]
+    for r in result["reading"]:
+        lines += [f"- {r}", ""]
+    return "\n".join(lines).rstrip("\n")
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="reconciler")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -394,6 +456,14 @@ def main(argv=None) -> int:
     b.add_argument("--doc", required=True)
     b.add_argument("--format", default="markdown", choices=("markdown", "json"), dest="fmt")
 
+    f = sub.add_parser("fleet", help="reconcile the same doc across many repos and pool "
+                                     "the result into one table")
+    f.add_argument("--repo", required=True, action="append", dest="repos",
+                   help="repeatable — a path or bare name, same rule as `run`'s --repo")
+    f.add_argument("--doc", default="docs/ideas.md",
+                   help="path relative to each --repo's root (same for every repo)")
+    f.add_argument("--format", default="markdown", choices=("markdown", "json"), dest="fmt")
+
     args = p.parse_args(argv)
     if args.cmd == "run":
         return run(args.repo, args.doc, args.fmt, args.validate)
@@ -403,6 +473,8 @@ def main(argv=None) -> int:
         return cmd_verify(args.repo, args.doc, args.fmt)
     if args.cmd == "benchmark":
         return cmd_benchmark(args.repo, args.doc, args.fmt)
+    if args.cmd == "fleet":
+        return cmd_fleet(args.repos, args.doc, args.fmt)
     if args.cmd == "install-hook":
         return cmd_install_hook(args.repo, args.force)
     return 2

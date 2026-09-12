@@ -20,6 +20,18 @@ from __future__ import annotations
 
 from .classify import EXPLICIT, INFERRED, LANDED, NOT_STARTED, PARTIAL, Verdict
 
+#: The caveat sentence every renderer of a ledger prints alongside its
+#: headline. Module-level (not inlined in `build_ledger`) so `reconciler
+#: fleet` can quote it verbatim across many repos' rows without paraphrasing
+#: it — see `fleet.py`.
+READING = ("NEVER read 'landed' as one pooled figure — explicit and inferred landed "
+           "counts are kept apart on purpose (an explicit tag is the doc author's own "
+           "word; an inferred hit is this tool's own git-log resolution, weaker and "
+           "reported as such). 'not_started' means 'no evidence found', not 'proven "
+           "unbuilt'. See each item's evidence_kind: explicit outranks inferred, which "
+           "outranks none (nothing located). See `--validate`'s hold-out score for what "
+           "the inferred tier can actually recover without being handed a tag.")
+
 
 def build_ledger(doc: str, repo: str, items_total: int, dropped: int,
                  verdicts: list[Verdict]) -> dict:
@@ -52,20 +64,12 @@ def build_ledger(doc: str, repo: str, items_total: int, dropped: int,
         f"({landed_inferred} landed, {partial_inferred} partial) and "
         f"{by_status[NOT_STARTED]} show no reliable automatic landing signal."
     )
-    reading = ("NEVER read 'landed' as one pooled figure — explicit and inferred landed "
-               "counts are kept apart on purpose (an explicit tag is the doc author's own "
-               "word; an inferred hit is this tool's own git-log resolution, weaker and "
-               "reported as such). 'not_started' means 'no evidence found', not 'proven "
-               "unbuilt'. See each item's evidence_kind: explicit outranks inferred, which "
-               "outranks none (nothing located). See `--validate`'s hold-out score for what "
-               "the inferred tier can actually recover without being handed a tag.")
-
     return {
         "doc": doc,
         "repo": repo,
         "headline": headline,
         "n": n,
-        "reading": reading,
+        "reading": READING,
         "items_total": items_total,
         "items_parsed": n,
         "dropped": dropped,

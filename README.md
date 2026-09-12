@@ -110,7 +110,9 @@ only ever call `git log`.
   loudly instead of asserting LANDED forever.
 - **hooks** — the `prepare-commit-msg` / `commit-msg` shell hooks and their
   installer; the one place this tool writes outside its own repo.
-- **cli** — `run`, `id`, `verify`, `install-hook`.
+- **fleet** — one table across many repos: the same `run`/`benchmark`
+  building blocks, called once per repo, never reimplemented.
+- **cli** — `run`, `id`, `verify`, `install-hook`, `fleet`.
 
 ## What the numbers mean
 
@@ -132,6 +134,30 @@ repo today it is **0.0** against a raw recovery of 0.9 — every trailer here wa
 written alongside the tag it recovers. That is the expected shape for a
 convention that has been demonstrated but not yet lived in, and the fix is
 time, not code.
+
+## The fleet, in one table
+
+Every verb above reads one doc in one repo. `fleet` reads several and pools
+the result — the same building blocks (`run`'s classification, `benchmark`'s
+recovery split), called once per repo:
+
+```sh
+reconciler fleet --repo willow-mcp --repo willow-reconciler --repo corpus-lens \
+  --doc docs/ideas.md --format markdown
+```
+
+`--repo` is repeatable and follows the same path-or-name rule as `run`'s (see
+above). `--doc` is one path checked in every repo listed — a repo whose doc
+doesn't exist there (wrong path, or a pile kept in a different shape, like
+corpus-lens's unnumbered `IDEAS.md`) is reported as a row reading `doc:
+missing`, not an error that aborts the rest of the fleet. The `totals` row is
+a straight sum of every readable repo's counts, plus a rate computed over
+those **pooled** counts — never an average of each repo's own rate, which
+would let a two-item repo and a two-hundred-item repo weigh the same. JSON
+output (`{"schema_version", "doc", "reading", "rows", "totals"}`) uses the
+same field names as `run --format json`'s ledger for the counts every row
+shares, so a `corpuslens diff`-style comparison across two fleet snapshots
+stays possible.
 
 ## The adversarial corpus
 

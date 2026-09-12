@@ -52,7 +52,7 @@ looser match.
 
 ## D. Scope past one doc, one repo
 
-14. A `fleet.toml` naming the (repo, doc) pairs to reconcile, and `reconciler run --all` producing one aggregate ledger. Every invocation today is one doc in one repo.
+14. ✅ **shipped**: as `reconciler fleet --repo A --repo B ... --doc D` (repeatable `--repo`, not a `fleet.toml` + `--all` flag — fewer moving parts for the same need) producing one table across repos: items parsed, dropped, explicit/inferred landed and partial, none, plus each repo's `independent_recovery_rate`/`recovery_rate` and a `totals` row rated over the POOLED counts. Every invocation before this one was one doc in one repo.
 15. Per-section ledgers. An idea pile with `## ` headings (this file included) has meaningful sub-piles; `parse.py` currently flattens the whole doc. Tracking the enclosing heading per item is a one-field change to `Item` and makes the ledger readable at the scale of a 123-item doc.
 
 ## E. Output and the loop back to the doc
