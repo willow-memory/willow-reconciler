@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Conventional Commits](https://www.conventionalcommits.org/) and this file is
 maintained by [release-please](https://github.com/googleapis/release-please).
 
+## [0.5.0](https://github.com/willow-memory/willow-reconciler/compare/v0.4.0...v0.5.0) (2026-09-12)
+
+
+### Added
+
+* reconciler fleet — one table across many repos, and --repo that works from a PyPI install ([539a5d2](https://github.com/willow-memory/willow-reconciler/commit/539a5d2d9cf10a874199690ed9f6dd4f7ceedd77))
+* reconciler fleet — one table across many repos, with the honest recall number ([c7e4433](https://github.com/willow-memory/willow-reconciler/commit/c7e44339a82abd06762fe2dae61c6492959255ff))
+
+
+### Fixed
+
+* --repo accepts a path, and a bare name resolves beside the caller's checkout, not the installed package ([0ec9144](https://github.com/willow-memory/willow-reconciler/commit/0ec9144fc7b8c3130fd4cea1b227e01d031e98ea))
+
 ## [0.4.0](https://github.com/willow-memory/willow-reconciler/compare/v0.3.0...v0.4.0) (2026-09-11)
 
 
