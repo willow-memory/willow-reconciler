@@ -70,6 +70,7 @@ a promise that it sees everything a scan could be shaped like. Scans written
 inline in a test body rather than as a helper are the second half of this
 file, with its own boundary stated there.
 """
+
 from __future__ import annotations
 
 import ast
@@ -82,8 +83,18 @@ TESTS_DIR = Path(__file__).resolve().parent
 #: `_reads_a_jsonl_path_with_bare_json_loads`-style names (reads is the
 #: *first*) both match without over-firing on unrelated names.
 _NAME_TOKENS = frozenset(
-    {"scan", "scans", "reads", "calls", "offenders", "uses", "check", "checks",
-     "guard", "guards"}
+    {
+        "scan",
+        "scans",
+        "reads",
+        "calls",
+        "offenders",
+        "uses",
+        "check",
+        "checks",
+        "guard",
+        "guards",
+    }
 )
 
 #: The convention this repo actually uses for "this scan was shown to fire on
@@ -242,13 +253,13 @@ def _scans_a_word_list(node: ast.AST, constants: frozenset[str]) -> bool:
     for sub in ast.walk(node):
         if isinstance(sub, ast.For):
             iterables, body = [sub.iter], sub.body
-        elif isinstance(sub, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+        elif isinstance(
+            sub, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)
+        ):
             iterables, body = [g.iter for g in sub.generators], [sub]
         else:
             continue
-        if not any(
-            isinstance(it, ast.Name) and it.id in constants for it in iterables
-        ):
+        if not any(isinstance(it, ast.Name) and it.id in constants for it in iterables):
             continue
         if any(_tests_membership(part) for part in body):
             return True
@@ -284,7 +295,8 @@ def _filters_by_membership(node: ast.AST) -> bool:
     for sub in ast.walk(node):
         if isinstance(sub, (ast.ListComp, ast.SetComp, ast.GeneratorExp)):
             targets = {
-                gen.target.id for gen in sub.generators
+                gen.target.id
+                for gen in sub.generators
                 if isinstance(gen.target, ast.Name)
             }
             conditions = [cond for gen in sub.generators for cond in gen.ifs]
@@ -482,7 +494,9 @@ def _names_the_plants_call(source: str) -> frozenset[str]:
 def _test_modules(tests_dir: Path) -> list[Path]:
     """Every `test_*.py` in `tests_dir` except this file, whose own helpers
     are proven by the plants below, not by the rule they implement."""
-    return [p for p in sorted(tests_dir.glob("test_*.py")) if p.name != Path(__file__).name]
+    return [
+        p for p in sorted(tests_dir.glob("test_*.py")) if p.name != Path(__file__).name
+    ]
 
 
 def _unplanted_shared_scan_helpers(tests_dir: Path = TESTS_DIR) -> list[str]:
@@ -676,7 +690,9 @@ def test_the_plant_check_does_not_fire_on_a_real_guarded_file():
     clear it — or it would be crying wolf on the very files it exists to
     clear."""
     source = (TESTS_DIR / "test_release_wiring.py").read_text(encoding="utf-8")
-    assert _scan_helpers(source), "test_release_wiring.py is expected to define scan helpers"
+    assert _scan_helpers(source), (
+        "test_release_wiring.py is expected to define scan helpers"
+    )
     assert _unplanted_scan_helpers(source) == []
 
 
@@ -947,8 +963,18 @@ def test_a_docstring_that_says_planted_does_clear_the_scan(tmp_path):
 #: to a *name*, not one of these, so a dict built from a read is still
 #: several steps removed and still not a scan.
 _TEXT_SLICERS = _TEXT_WRAPPERS | frozenset(
-    {"split", "rsplit", "splitlines", "partition", "rpartition", "replace",
-     "lstrip", "rstrip", "removeprefix", "removesuffix"}
+    {
+        "split",
+        "rsplit",
+        "splitlines",
+        "partition",
+        "rpartition",
+        "replace",
+        "lstrip",
+        "rstrip",
+        "removeprefix",
+        "removesuffix",
+    }
 )
 
 
@@ -1032,9 +1058,15 @@ def _isinstance_against_ast_type(node: ast.AST) -> bool:
     a test that merely calls `ast.parse()` and hands the tree to a scan
     helper already defined (and already planted) elsewhere."""
     for call in _calls_in(node):
-        if isinstance(call.func, ast.Name) and call.func.id == "isinstance" and len(call.args) == 2:
+        if (
+            isinstance(call.func, ast.Name)
+            and call.func.id == "isinstance"
+            and len(call.args) == 2
+        ):
             type_arg = call.args[1]
-            candidates = type_arg.elts if isinstance(type_arg, ast.Tuple) else [type_arg]
+            candidates = (
+                type_arg.elts if isinstance(type_arg, ast.Tuple) else [type_arg]
+            )
             for candidate in candidates:
                 if (
                     isinstance(candidate, ast.Attribute)
@@ -1101,9 +1133,7 @@ def _resolvable_helpers(source: str, global_helpers: frozenset[str]) -> frozense
     """The known scan helpers this module can reach by a *bare* name: the
     ones it imports, and the ones it defines itself."""
     tree = ast.parse(source)
-    return global_helpers & (
-        _imported_names(tree) | frozenset(_scan_helpers(source))
-    )
+    return global_helpers & (_imported_names(tree) | frozenset(_scan_helpers(source)))
 
 
 def _is_inline_scan(
@@ -1176,7 +1206,9 @@ def _inline_scan_offenders(tests_dir: Path = TESTS_DIR) -> list[str]:
     global_helpers = _global_scan_helper_names(tests_dir)
     offenders = []
     for path in _test_modules(tests_dir):
-        for name in _inline_scan_tests(path.read_text(encoding="utf-8"), global_helpers):
+        for name in _inline_scan_tests(
+            path.read_text(encoding="utf-8"), global_helpers
+        ):
             offenders.append(f"{path.name}::{name}")
     return offenders
 
@@ -1217,7 +1249,9 @@ def test_the_inline_scan_check_finds_a_scan_written_directly_in_a_test_body(tmp_
         "        if isinstance(node, ast.Import):\n"
         "            assert 'banned' not in {a.name for a in node.names}\n",
     )
-    assert _inline_scan_tests(source, frozenset()) == ["test_no_banned_import_at_module_scope"]
+    assert _inline_scan_tests(source, frozenset()) == [
+        "test_no_banned_import_at_module_scope"
+    ]
 
 
 def test_the_inline_scan_check_knows_every_spelling_of_reading_a_real_file(tmp_path):
@@ -1250,7 +1284,9 @@ def test_the_inline_scan_check_knows_every_spelling_of_reading_a_real_file(tmp_p
         )
 
 
-def test_the_inline_scan_check_follows_a_slice_of_the_text_but_not_a_parse_of_it(tmp_path):
+def test_the_inline_scan_check_follows_a_slice_of_the_text_but_not_a_parse_of_it(
+    tmp_path,
+):
     """The boundary the one-level rule draws, planted both ways. A `.split()`
     of the text read is still that text, but a dict `json.loads` built from
     it is another kind of object, and asking membership of *that* is the
@@ -1266,7 +1302,9 @@ def test_the_inline_scan_check_follows_a_slice_of_the_text_but_not_a_parse_of_it
         "    block = source.split('def main')[1].split('def _render')[0]\n"
         "    assert 'merge' not in block\n",
     )
-    assert _inline_scan_tests(sliced, frozenset()) == ["test_the_dispatcher_names_no_merge"]
+    assert _inline_scan_tests(sliced, frozenset()) == [
+        "test_the_dispatcher_names_no_merge"
+    ]
 
     parsed = _write(
         tmp_path,

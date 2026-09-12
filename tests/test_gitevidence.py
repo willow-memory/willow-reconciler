@@ -22,6 +22,7 @@ def repo_factory(tmp_path):
             _run(["git", "add", f"f{i}.txt"], repo)
             _run(["git", "commit", "-q", "-m", msg], repo)
         return repo
+
     return make
 
 
@@ -37,8 +38,14 @@ def test_idea_trailer_defaults_to_landed(repo_factory):
 def test_idea_trailer_honors_idea_status_partial(repo_factory):
     """The inferred tier's route to PARTIAL: a same-commit Idea-Status
     trailer overrides the landed default."""
-    repo = repo_factory([("feat: half-build the thing\n\n"
-                         "Idea-Id: willow-ideas-011\nIdea-Status: partial\n")])
+    repo = repo_factory(
+        [
+            (
+                "feat: half-build the thing\n\n"
+                "Idea-Id: willow-ideas-011\nIdea-Status: partial\n"
+            )
+        ]
+    )
     gitlog = GitLog.load(str(repo))
     hit = gitlog.find_idea_trailer("willow-ideas-011")
     assert hit is not None
@@ -54,8 +61,18 @@ def test_find_merged_pr_via_a_real_merge_commit(repo_factory):
     _run(["git", "add", "side.txt"], repo)
     _run(["git", "commit", "-q", "-m", "feat: side work"], repo)
     _run(["git", "checkout", "-q", "-"], repo)
-    _run(["git", "merge", "--no-ff", "-q", "-m",
-          "Merge pull request #77 from someone/branch", "side"], repo)
+    _run(
+        [
+            "git",
+            "merge",
+            "--no-ff",
+            "-q",
+            "-m",
+            "Merge pull request #77 from someone/branch",
+            "side",
+        ],
+        repo,
+    )
     gitlog = GitLog.load(str(repo))
     assert gitlog.find_merged_pr(77) is not None
     assert gitlog.find_merged_pr(78) is None
@@ -86,12 +103,24 @@ def test_find_merged_pr_does_not_match_body_only_mention(repo_factory):
 
 
 def test_never_mutates_the_repo(repo_factory):
-    repo = repo_factory(["feat: build friction_floor (#77)\n\nIdea-Id: willow-ideas-066\n"])
-    before = subprocess.run(["git", "status", "--porcelain"], cwd=repo,
-                            capture_output=True, text=True, check=True).stdout
+    repo = repo_factory(
+        ["feat: build friction_floor (#77)\n\nIdea-Id: willow-ideas-066\n"]
+    )
+    before = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
     GitLog.load(str(repo))
-    after = subprocess.run(["git", "status", "--porcelain"], cwd=repo,
-                           capture_output=True, text=True, check=True).stdout
+    after = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
     assert before == after == ""
 
 
@@ -141,11 +170,13 @@ def test_error_on_a_missing_git_binary_is_classified_not_raw(monkeypatch, tmp_pa
 def test_all_idea_trailers_reports_what_the_commits_claim(repo_factory):
     """The inverse of find_idea_trailer: not "does this item have evidence?"
     but "what do the commits say?" — which is what catches a dangling key."""
-    repo = repo_factory([
-        "chore: no trailer here",
-        "feat: a\n\nIdea-Id: willow-ideas-001",
-        "feat: b\n\nIdea-Id: willow-ideas-002\nIdea-Status: partial",
-    ])
+    repo = repo_factory(
+        [
+            "chore: no trailer here",
+            "feat: a\n\nIdea-Id: willow-ideas-001",
+            "feat: b\n\nIdea-Id: willow-ideas-002\nIdea-Status: partial",
+        ]
+    )
     found = GitLog.load(str(repo)).all_idea_trailers()
     assert {(ident, status) for _, ident, status in found} == {
         ("willow-ideas-001", "landed"),
@@ -160,10 +191,14 @@ def test_all_idea_trailers_is_empty_on_a_history_predating_the_convention(repo_f
 def test_a_commit_landing_several_ideas_registers_every_trailer(repo_factory):
     """One commit, several trailers — `search` would have seen only the first
     and silently cost every later id its strongest evidence."""
-    repo = repo_factory([
-        ("feat: the write-side loop\n\n"
-        "Idea-Id: willow-ideas-001\nIdea-Id: willow-ideas-002\nIdea-Id: willow-ideas-003")
-    ])
+    repo = repo_factory(
+        [
+            (
+                "feat: the write-side loop\n\n"
+                "Idea-Id: willow-ideas-001\nIdea-Id: willow-ideas-002\nIdea-Id: willow-ideas-003"
+            )
+        ]
+    )
     log = GitLog.load(str(repo))
     assert len(log.all_idea_trailers()) == 3
     for n in ("001", "002", "003"):
@@ -179,7 +214,10 @@ def test_a_trailer_on_an_unmerged_branch_is_not_evidence(repo_factory):
     _run(["git", "checkout", "-q", "-b", "abandoned"], repo)
     (repo / "x.txt").write_text("x\n")
     _run(["git", "add", "x.txt"], repo)
-    _run(["git", "commit", "-q", "-m", "feat: rejected\n\nIdea-Id: willow-ideas-050"], repo)
+    _run(
+        ["git", "commit", "-q", "-m", "feat: rejected\n\nIdea-Id: willow-ideas-050"],
+        repo,
+    )
     _run(["git", "checkout", "-q", "-"], repo)
 
     gitlog = GitLog.load(str(repo))
@@ -195,8 +233,18 @@ def test_a_trailer_merged_into_the_checkout_is_evidence(repo_factory):
     _run(["git", "add", "x.txt"], repo)
     _run(["git", "commit", "-q", "-m", "feat: real\n\nIdea-Id: willow-ideas-050"], repo)
     _run(["git", "checkout", "-q", "-"], repo)
-    _run(["git", "merge", "--no-ff", "-q", "-m", "Merge pull request #1 from x/side",
-          "side"], repo)
+    _run(
+        [
+            "git",
+            "merge",
+            "--no-ff",
+            "-q",
+            "-m",
+            "Merge pull request #1 from x/side",
+            "side",
+        ],
+        repo,
+    )
 
     assert GitLog.load(str(repo)).find_idea_trailer("willow-ideas-050") is not None
 
@@ -213,20 +261,26 @@ def test_an_empty_repo_reads_as_an_available_but_empty_history(tmp_path):
 
 
 def test_a_repeated_identical_trailer_counts_once(repo_factory):
-    repo = repo_factory(["feat: x\n\nIdea-Id: willow-ideas-001\nIdea-Id: willow-ideas-001"])
+    repo = repo_factory(
+        ["feat: x\n\nIdea-Id: willow-ideas-001\nIdea-Id: willow-ideas-001"]
+    )
     assert len(GitLog.load(str(repo)).all_idea_trailers()) == 1
 
 
 def test_a_commit_discussing_a_trailer_does_not_carry_it(repo_factory):
     """Mention is not evidence, in the evidence layer: prose explaining the
     convention must not read as a claim on an idea."""
-    repo = repo_factory([
-        ("docs: explain the convention\n\n"
-        "A commit that half-lands an idea adds a line reading\n"
-        "Idea-Status: partial — and names the id with\n"
-        "Idea-Id: willow-ideas-001 on its own line.\n\n"
-        "Co-Authored-By: Someone <s@example.com>")
-    ])
+    repo = repo_factory(
+        [
+            (
+                "docs: explain the convention\n\n"
+                "A commit that half-lands an idea adds a line reading\n"
+                "Idea-Status: partial — and names the id with\n"
+                "Idea-Id: willow-ideas-001 on its own line.\n\n"
+                "Co-Authored-By: Someone <s@example.com>"
+            )
+        ]
+    )
     log = GitLog.load(str(repo))
     assert log.all_idea_trailers() == []
     assert log.find_idea_trailer("willow-ideas-001") is None
@@ -236,10 +290,14 @@ def test_a_trailer_paragraph_above_the_coauthor_block_still_counts(repo_factory)
     """The convention's own commits put Idea-Id in its own paragraph above
     Co-Authored-By; git proper would count only the last paragraph, which
     would discard every trailer written so far."""
-    repo = repo_factory([
-        ("feat: thing\n\nsome prose here.\n\n"
-        "Idea-Id: willow-ideas-002\nIdea-Status: partial\n\n"
-        "Co-Authored-By: Someone <s@example.com>")
-    ])
+    repo = repo_factory(
+        [
+            (
+                "feat: thing\n\nsome prose here.\n\n"
+                "Idea-Id: willow-ideas-002\nIdea-Status: partial\n\n"
+                "Co-Authored-By: Someone <s@example.com>"
+            )
+        ]
+    )
     hit = GitLog.load(str(repo)).find_idea_trailer("willow-ideas-002")
     assert hit is not None and hit[1] == "partial"

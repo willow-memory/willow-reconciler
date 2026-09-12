@@ -21,6 +21,7 @@ json` has never carried one, so there is no existing number to inherit; bump
 it, corpus-lens-style (see its README), only on a field REMOVAL or MEANING
 change, never on an addition.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -43,8 +44,15 @@ DOC_MISSING = "missing"
 
 #: Numeric fields present on every `doc_status == DOC_OK` row — the shared
 #: order for both the markdown table's columns and `totals`' keys.
-COUNT_FIELDS = ("items_parsed", "dropped", "explicit_landed", "explicit_partial",
-                "inferred_landed", "inferred_partial", "none")
+COUNT_FIELDS = (
+    "items_parsed",
+    "dropped",
+    "explicit_landed",
+    "explicit_partial",
+    "inferred_landed",
+    "inferred_partial",
+    "none",
+)
 
 
 def reconcile_one(repo_label: str, repo_path: Path, doc: str) -> dict:
@@ -55,19 +63,32 @@ def reconcile_one(repo_label: str, repo_path: Path, doc: str) -> dict:
     try:
         text = doc_path.read_text(encoding="utf-8")
     except OSError as e:
-        return {"repo": repo_label, "doc": doc, "doc_status": DOC_MISSING,
-                "doc_error": classify_file(str(e))}
+        return {
+            "repo": repo_label,
+            "doc": doc,
+            "doc_status": DOC_MISSING,
+            "doc_error": classify_file(str(e)),
+        }
 
     items, dropped = parse_doc(text)
     if not items:
-        return {"repo": repo_label, "doc": doc, "doc_status": DOC_MISSING,
-                "doc_error": "no numbered items found (wrong file, or a doc with "
-                             "no top-level `N. ` list items)"}
+        return {
+            "repo": repo_label,
+            "doc": doc,
+            "doc_status": DOC_MISSING,
+            "doc_error": "no numbered items found (wrong file, or a doc with "
+            "no top-level `N. ` list items)",
+        }
 
     gitlog = GitLog.load(str(repo_path))
     verdicts = [classify_item(idea_id(i.num), i.num, i.text, gitlog) for i in items]
-    ledger = build_ledger(doc=doc, repo=repo_label, items_total=len(items) + dropped,
-                          dropped=dropped, verdicts=verdicts)
+    ledger = build_ledger(
+        doc=doc,
+        repo=repo_label,
+        items_total=len(items) + dropped,
+        dropped=dropped,
+        verdicts=verdicts,
+    )
     bench = run_benchmark(items, gitlog, str(repo_path), doc)
 
     bsk = ledger["counts_by_status_and_kind"]
@@ -99,16 +120,23 @@ def _totals(rows: list[dict]) -> dict:
     n_hand_tagged = sum(r["n_hand_tagged"] for r in ok_rows)
     n_recovered = sum(r["n_recovered"] for r in ok_rows)
     n_recovered_independent = sum(r["n_recovered_independent"] for r in ok_rows)
-    totals.update({
-        "repos_ok": len(ok_rows),
-        "repos_doc_missing": len(rows) - len(ok_rows),
-        "n_hand_tagged": n_hand_tagged,
-        "n_recovered": n_recovered,
-        "n_recovered_independent": n_recovered_independent,
-        "pooled_recovery_rate": (n_recovered / n_hand_tagged) if n_hand_tagged else None,
-        "pooled_independent_recovery_rate":
-            (n_recovered_independent / n_hand_tagged) if n_hand_tagged else None,
-    })
+    totals.update(
+        {
+            "repos_ok": len(ok_rows),
+            "repos_doc_missing": len(rows) - len(ok_rows),
+            "n_hand_tagged": n_hand_tagged,
+            "n_recovered": n_recovered,
+            "n_recovered_independent": n_recovered_independent,
+            "pooled_recovery_rate": (n_recovered / n_hand_tagged)
+            if n_hand_tagged
+            else None,
+            "pooled_independent_recovery_rate": (
+                n_recovered_independent / n_hand_tagged
+            )
+            if n_hand_tagged
+            else None,
+        }
+    )
     return totals
 
 

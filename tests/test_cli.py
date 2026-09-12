@@ -21,8 +21,13 @@ def tiny_repo(tmp_path):
 
 
 def test_run_writes_json_with_expected_counts(tiny_repo, capsys):
-    rc = run(repo="toyrepo", doc="docs/ideas.md", fmt="json", do_validate=True,
-             fleet_root=tiny_repo.parent)
+    rc = run(
+        repo="toyrepo",
+        doc="docs/ideas.md",
+        fmt="json",
+        do_validate=True,
+        fleet_root=tiny_repo.parent,
+    )
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert out["n"] == 3
@@ -35,7 +40,9 @@ def test_run_writes_json_with_expected_counts(tiny_repo, capsys):
 
 
 def test_headline_splits_explicit_and_inferred_landed(tiny_repo, capsys):
-    rc = run(repo="toyrepo", doc="docs/ideas.md", fmt="json", fleet_root=tiny_repo.parent)
+    rc = run(
+        repo="toyrepo", doc="docs/ideas.md", fmt="json", fleet_root=tiny_repo.parent
+    )
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert "explicit legend tag" in out["headline"]
@@ -43,7 +50,9 @@ def test_headline_splits_explicit_and_inferred_landed(tiny_repo, capsys):
 
 
 def test_run_unknown_repo_errors_cleanly(tmp_path, capsys):
-    rc = run(repo="does-not-exist", doc="docs/ideas.md", fmt="json", fleet_root=tmp_path)
+    rc = run(
+        repo="does-not-exist", doc="docs/ideas.md", fmt="json", fleet_root=tmp_path
+    )
     assert rc == 2
     assert "error:" in capsys.readouterr().err
 
@@ -57,11 +66,17 @@ def test_run_never_mutates_the_doc(tiny_repo):
 
 # --- the write-side verbs -------------------------------------------------
 
+
 def test_id_prints_only_the_trailer_on_stdout(tiny_repo, capsys):
     """stdout has to pipe straight into a commit message, so the item it
     resolved to goes to stderr."""
-    rc = cmd_id(repo="toyrepo", doc="docs/ideas.md", num=2, grep=None,
-                fleet_root=tiny_repo.parent)
+    rc = cmd_id(
+        repo="toyrepo",
+        doc="docs/ideas.md",
+        num=2,
+        grep=None,
+        fleet_root=tiny_repo.parent,
+    )
     captured = capsys.readouterr()
     assert rc == 0
     assert captured.out.strip() == "Idea-Id: willow-ideas-002"
@@ -69,15 +84,25 @@ def test_id_prints_only_the_trailer_on_stdout(tiny_repo, capsys):
 
 
 def test_id_by_grep_resolves_a_unique_match(tiny_repo, capsys):
-    rc = cmd_id(repo="toyrepo", doc="docs/ideas.md", num=None, grep="bare idea",
-                fleet_root=tiny_repo.parent)
+    rc = cmd_id(
+        repo="toyrepo",
+        doc="docs/ideas.md",
+        num=None,
+        grep="bare idea",
+        fleet_root=tiny_repo.parent,
+    )
     assert rc == 0
     assert capsys.readouterr().out.strip() == "Idea-Id: willow-ideas-003"
 
 
 def test_id_refuses_an_ambiguous_grep_rather_than_guessing(tiny_repo, capsys):
-    rc = cmd_id(repo="toyrepo", doc="docs/ideas.md", num=None, grep="idea",
-                fleet_root=tiny_repo.parent)
+    rc = cmd_id(
+        repo="toyrepo",
+        doc="docs/ideas.md",
+        num=None,
+        grep="idea",
+        fleet_root=tiny_repo.parent,
+    )
     assert rc == 1
     err = capsys.readouterr().err
     assert "matches 3 items" in err
@@ -85,34 +110,52 @@ def test_id_refuses_an_ambiguous_grep_rather_than_guessing(tiny_repo, capsys):
 
 
 def test_id_on_a_missing_item_errors(tiny_repo, capsys):
-    rc = cmd_id(repo="toyrepo", doc="docs/ideas.md", num=99, grep=None,
-                fleet_root=tiny_repo.parent)
+    rc = cmd_id(
+        repo="toyrepo",
+        doc="docs/ideas.md",
+        num=99,
+        grep=None,
+        fleet_root=tiny_repo.parent,
+    )
     assert rc == 1
     assert "no item" in capsys.readouterr().err
 
 
 def test_id_partial_emits_a_status_trailer(tiny_repo, capsys):
-    rc = cmd_id(repo="toyrepo", doc="docs/ideas.md", num=1, grep=None, status="partial",
-                fleet_root=tiny_repo.parent)
+    rc = cmd_id(
+        repo="toyrepo",
+        doc="docs/ideas.md",
+        num=1,
+        grep=None,
+        status="partial",
+        fleet_root=tiny_repo.parent,
+    )
     assert rc == 0
     assert capsys.readouterr().out.strip().endswith("Idea-Status: partial")
 
 
 def test_verify_passes_on_a_history_with_no_trailers(tiny_repo, capsys):
-    rc = cmd_verify(repo="toyrepo", doc="docs/ideas.md", fmt="json",
-                    fleet_root=tiny_repo.parent)
+    rc = cmd_verify(
+        repo="toyrepo", doc="docs/ideas.md", fmt="json", fleet_root=tiny_repo.parent
+    )
     assert rc == 0
     assert json.loads(capsys.readouterr().out)["n"] == 0
 
 
 def test_verify_exits_nonzero_on_a_dangling_trailer(tiny_repo, capsys):
-    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=tiny_repo, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "t@example.com"], cwd=tiny_repo, check=True
+    )
     subprocess.run(["git", "config", "user.name", "T"], cwd=tiny_repo, check=True)
     subprocess.run(["git", "add", "-A"], cwd=tiny_repo, check=True)
-    subprocess.run(["git", "commit", "-q", "-m", "feat: x\n\nIdea-Id: willow-ideas-404"],
-                   cwd=tiny_repo, check=True)
-    rc = cmd_verify(repo="toyrepo", doc="docs/ideas.md", fmt="json",
-                    fleet_root=tiny_repo.parent)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "feat: x\n\nIdea-Id: willow-ideas-404"],
+        cwd=tiny_repo,
+        check=True,
+    )
+    rc = cmd_verify(
+        repo="toyrepo", doc="docs/ideas.md", fmt="json", fleet_root=tiny_repo.parent
+    )
     assert rc == 1
     out = json.loads(capsys.readouterr().out)
     assert out["unresolved"][0]["idea_id"] == "willow-ideas-404"
@@ -134,13 +177,16 @@ def test_install_hook_on_a_missing_repo_errors_cleanly(tmp_path, capsys):
 # --- --repo: a path or a bare name, resolved beside the caller not the ------
 # --- installed package (the packaged-tool-cannot-find-a-repo bug) ----------
 
+
 def _git_repo_with_one_item(path):
     (path / "docs").mkdir(parents=True)
     (path / "docs" / "ideas.md").write_text("1. an idea with no evidence\n")
     subprocess.run(["git", "init", "-q"], cwd=path, check=True)
 
 
-def test_repo_as_absolute_path_works_from_an_unrelated_cwd(tmp_path, monkeypatch, capsys):
+def test_repo_as_absolute_path_works_from_an_unrelated_cwd(
+    tmp_path, monkeypatch, capsys
+):
     repo = tmp_path / "elsewhere" / "myrepo"
     _git_repo_with_one_item(repo)
     other_cwd = tmp_path / "unrelated"
@@ -152,7 +198,9 @@ def test_repo_as_absolute_path_works_from_an_unrelated_cwd(tmp_path, monkeypatch
     assert json.loads(capsys.readouterr().out)["n"] == 1
 
 
-def test_repo_as_relative_path_works_from_an_unrelated_cwd(tmp_path, monkeypatch, capsys):
+def test_repo_as_relative_path_works_from_an_unrelated_cwd(
+    tmp_path, monkeypatch, capsys
+):
     repo = tmp_path / "elsewhere" / "myrepo"
     _git_repo_with_one_item(repo)
     other_cwd = tmp_path / "unrelated"
@@ -165,7 +213,8 @@ def test_repo_as_relative_path_works_from_an_unrelated_cwd(tmp_path, monkeypatch
 
 
 def test_bare_name_resolves_beside_callers_checkout_when_package_elsewhere(
-        tmp_path, monkeypatch, capsys):
+    tmp_path, monkeypatch, capsys
+):
     """Simulates the packaged (PyPI) failure mode: the package's OWN checkout
     (`_fleet_root`) has no useful sibling — from `site-packages` it never
     would — but the caller's own git checkout does, and that is where a bare
@@ -187,7 +236,9 @@ def test_bare_name_resolves_beside_callers_checkout_when_package_elsewhere(
     assert json.loads(capsys.readouterr().out)["n"] == 1
 
 
-def test_bare_name_resolving_nowhere_names_every_candidate(tmp_path, monkeypatch, capsys):
+def test_bare_name_resolving_nowhere_names_every_candidate(
+    tmp_path, monkeypatch, capsys
+):
     lonely_checkout = tmp_path / "lonely-checkout"
     lonely_checkout.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=lonely_checkout, check=True)

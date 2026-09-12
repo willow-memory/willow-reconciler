@@ -4,6 +4,7 @@ The adversarial corpus is built ONCE per test session (it shells out to git a
 dozen times) and handed to tests read-only — nothing in the suite may mutate
 it, which is also true of the tool itself.
 """
+
 from __future__ import annotations
 
 import pytest

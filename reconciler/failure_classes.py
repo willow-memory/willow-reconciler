@@ -42,17 +42,20 @@ The failure classes here are git-shaped, not psql/sqlite-shaped: this module
 does not carry corpus-lens's database markers, which have no meaning for a
 `git log` invocation.
 """
+
 from __future__ import annotations
 
 #: The closed vocabulary. A caller may emit these strings and no others.
-FAILURE_CLASSES: frozenset[str] = frozenset({
-    "not a git repository",
-    "the repository has no commits yet",
-    "the git binary is missing",
-    "permission denied accessing the repository",
-    "the git command timed out",
-    "unknown failure",
-})
+FAILURE_CLASSES: frozenset[str] = frozenset(
+    {
+        "not a git repository",
+        "the repository has no commits yet",
+        "the git binary is missing",
+        "permission denied accessing the repository",
+        "the git command timed out",
+        "unknown failure",
+    }
+)
 
 UNKNOWN = "unknown failure"
 
@@ -108,19 +111,22 @@ def describe(operation: str, foreign_text: str | None) -> str:
     """
     return f"{operation} failed: {classify(foreign_text)}"
 
+
 #: A SEPARATE vocabulary for reading a file, deliberately not folded into the
 #: git table above. The git phrases are context-specific ("permission denied
 #: accessing the repository"), and reusing them for a doc read would report a
 #: correct class in the wrong words — the same misleading-but-confident failure
 #: the ordering trap above exists to prevent. Two small honest vocabularies beat
 #: one that has to be vague enough to cover both.
-FILE_FAILURE_CLASSES: frozenset[str] = frozenset({
-    "no such file",
-    "permission denied",
-    "the path is a directory",
-    "the file is not valid UTF-8",
-    "unknown failure",
-})
+FILE_FAILURE_CLASSES: frozenset[str] = frozenset(
+    {
+        "no such file",
+        "permission denied",
+        "the path is a directory",
+        "the file is not valid UTF-8",
+        "unknown failure",
+    }
+)
 
 _FILE_MARKERS: tuple[tuple[str, str], ...] = (
     ("is a directory", "the path is a directory"),

@@ -1,6 +1,7 @@
 """The hooks are shell, not Python, so they are tested by actually committing
 through them in a throwaway repo — a hook that reads correctly and does not
 fire is the only kind of hook bug that matters."""
+
 import subprocess
 
 import pytest
@@ -90,6 +91,7 @@ def test_non_git_directory_errors_rather_than_writing(tmp_path):
 
 # --- prepare-commit-msg behaviour ---------------------------------------
 
+
 def test_branch_naming_an_idea_gets_a_zero_padded_trailer(repo):
     install_hooks(repo)
     _run(["git", "checkout", "-qb", "feature/idea-24-anchor-tags"], repo)
@@ -135,6 +137,7 @@ def test_the_trailer_joins_the_existing_trailer_block(repo):
 
 # --- commit-msg validation ----------------------------------------------
 
+
 def test_malformed_trailer_is_rejected_and_no_commit_is_made(repo):
     install_hooks(repo)
     _run(["git", "checkout", "-qb", "main-work"], repo)
@@ -150,9 +153,12 @@ def test_malformed_status_is_rejected(repo):
     install_hooks(repo)
     _run(["git", "checkout", "-qb", "main-work"], repo)
     _commit(repo, "a.txt", "chore: first")
-    proc = _commit(repo, "b.txt",
-                   "feat: y\n\nIdea-Id: willow-ideas-001\nIdea-Status: mostly",
-                   check=False)
+    proc = _commit(
+        repo,
+        "b.txt",
+        "feat: y\n\nIdea-Id: willow-ideas-001\nIdea-Status: mostly",
+        check=False,
+    )
     assert proc.returncode == 1
     assert "landed" in proc.stderr
 
@@ -165,6 +171,7 @@ def test_a_well_formed_trailer_passes_validation(repo):
 
 
 # --- post-write-side audit regressions ------------------------------------
+
 
 def test_a_branch_naming_two_ideas_gets_no_trailer(repo):
     """Finding #3: the old greedy sed took the LAST number, so this branch
@@ -224,13 +231,16 @@ def test_prose_discussing_the_convention_is_not_rejected(repo):
     a claim, here as everywhere else."""
     install_hooks(repo)
     _run(["git", "checkout", "-qb", "docs-work"], repo)
-    proc = _commit(repo, "a.txt",
-                   "docs: explain the convention\n\n"
-                   "Alongside them sit the controls — a resolving trailer, an\n"
-                   "Idea-Status: partial — because a precision fix that simply\n"
-                   "disables a rule should fail too.\n\n"
-                   "Co-Authored-By: Someone <s@example.com>",
-                   check=False)
+    proc = _commit(
+        repo,
+        "a.txt",
+        "docs: explain the convention\n\n"
+        "Alongside them sit the controls — a resolving trailer, an\n"
+        "Idea-Status: partial — because a precision fix that simply\n"
+        "disables a rule should fail too.\n\n"
+        "Co-Authored-By: Someone <s@example.com>",
+        check=False,
+    )
     assert proc.returncode == 0, proc.stderr
 
 
@@ -238,9 +248,12 @@ def test_a_malformed_trailer_in_the_real_trailer_block_is_still_rejected(repo):
     install_hooks(repo)
     _run(["git", "checkout", "-qb", "real-work"], repo)
     _commit(repo, "a.txt", "chore: first")
-    proc = _commit(repo, "b.txt",
-                   "feat: y\n\nsome prose.\n\nIdea-Id: willow-ideas-7\n\n"
-                   "Co-Authored-By: Someone <s@example.com>",
-                   check=False)
+    proc = _commit(
+        repo,
+        "b.txt",
+        "feat: y\n\nsome prose.\n\nIdea-Id: willow-ideas-7\n\n"
+        "Co-Authored-By: Someone <s@example.com>",
+        check=False,
+    )
     assert proc.returncode == 1
     assert "malformed Idea-Id trailer" in proc.stderr

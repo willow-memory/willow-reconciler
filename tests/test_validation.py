@@ -11,6 +11,7 @@ SUPPLEMENT, not the coverage: `tests/test_corpus.py` asserts the same
 behaviours against the in-repo adversarial corpus and runs everywhere. What
 these add is the one thing a fixture cannot fake — the real doc's real shape.
 """
+
 import pathlib
 
 import pytest
@@ -28,8 +29,10 @@ IDEAS_DOC = FLEET_ROOT / "willow-mcp" / "docs" / "ideas.md"
 @pytest.fixture
 def real_run():
     if not IDEAS_DOC.exists():
-        pytest.skip("willow-mcp sibling absent; test_corpus.py covers this "
-                    "behaviour against the in-repo fixture")
+        pytest.skip(
+            "willow-mcp sibling absent; test_corpus.py covers this "
+            "behaviour against the in-repo fixture"
+        )
     text = IDEAS_DOC.read_text(encoding="utf-8")
     items, _dropped = parse_doc(text)
     gitlog = GitLog.load(str(FLEET_ROOT / "willow-mcp"))
