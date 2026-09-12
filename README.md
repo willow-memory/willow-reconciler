@@ -112,7 +112,10 @@ only ever call `git log`.
   installer; the one place this tool writes outside its own repo.
 - **fleet** — one table across many repos: the same `run`/`benchmark`
   building blocks, called once per repo, never reimplemented.
-- **cli** — `run`, `id`, `verify`, `install-hook`, `fleet`.
+- **conventions** — the fleet's convention set (hidden commit types, required
+  workflows, required config comments) as data with a source per rule; the one
+  home every repo's `tests/test_fleet_conventions.py` reads.
+- **cli** — `run`, `id`, `verify`, `install-hook`, `fleet`, `conventions`.
 
 ## What the numbers mean
 
@@ -158,6 +161,25 @@ output (`{"schema_version", "doc", "reading", "rows", "totals"}`) uses the
 same field names as `run --format json`'s ledger for the counts every row
 shares, so a `corpuslens diff`-style comparison across two fleet snapshots
 stays possible.
+
+## The fleet's conventions, from one place
+
+```sh
+reconciler conventions          # readable, one rule per line with its source
+reconciler conventions --json   # {"schema": "willow-fleet-conventions/1", ...}
+```
+
+Every repo in the fleet carries a `tests/test_fleet_conventions.py` that holds
+its own tree to the same rules: which commit types release-please must hide,
+that `.github/workflows/pr-title.yml` exists wherever `release-please.yml`
+arms auto-merge, that `release-please-config.json` carries its two reasoning
+comments, that `trailers.yml` runs wherever a numbered pile exists, that
+CONTRIBUTING names the test command. The rules have one home —
+`reconciler/conventions.py`, published by this verb — and consumers read it
+rather than restating it, so a rule changes in one place or not at all. Each
+rule names the incident or decision it comes from (`sources`), because a rule
+with no source is an opinion. Takes no `--repo`: the rules are the fleet's,
+not any one checkout's.
 
 ## The adversarial corpus
 

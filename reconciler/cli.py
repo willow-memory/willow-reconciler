@@ -6,6 +6,7 @@
     reconciler install-hook --repo willow-mcp [--force]
     reconciler benchmark --repo willow-mcp --doc docs/ideas.md [--format markdown|json]
     reconciler fleet --repo willow-mcp --repo willow-reconciler [--doc docs/ideas.md] [--format markdown|json]
+    reconciler conventions [--json]
 
 `run` and `verify` are read-only (`git log` only). `install-hook` is the one
 verb that writes into the target repo, which is why it is a verb and not a
@@ -45,6 +46,7 @@ from pathlib import Path
 from . import validate as validatemod
 from .benchmark import benchmark
 from .classify import classify_item
+from .conventions import conventions, render_json, render_markdown
 from .emit import VALID_STATUSES, find_items, trailer_block
 from .failure_classes import classify_file
 from .fleet import DOC_OK, build_fleet
@@ -410,6 +412,15 @@ def _render_fleet(result: dict) -> str:
     return "\n".join(lines).rstrip("\n")
 
 
+def cmd_conventions(as_json: bool = False) -> int:
+    """Publish the fleet convention set (`conventions.py`). Takes no --repo:
+    the rules are the fleet's, not any one repo's, and every consumer's
+    `tests/test_fleet_conventions.py` is what holds a tree to them."""
+    doc = conventions()
+    print(render_json(doc) if as_json else render_markdown(doc))
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="reconciler")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -464,6 +475,12 @@ def main(argv=None) -> int:
                    help="path relative to each --repo's root (same for every repo)")
     f.add_argument("--format", default="markdown", choices=("markdown", "json"), dest="fmt")
 
+    c = sub.add_parser("conventions", help="publish the fleet's convention set — the one "
+                                           "home of the rules every repo's "
+                                           "tests/test_fleet_conventions.py reads")
+    c.add_argument("--json", action="store_true", dest="as_json",
+                   help="emit the schema-versioned JSON document instead of markdown")
+
     args = p.parse_args(argv)
     if args.cmd == "run":
         return run(args.repo, args.doc, args.fmt, args.validate)
@@ -475,6 +492,8 @@ def main(argv=None) -> int:
         return cmd_benchmark(args.repo, args.doc, args.fmt)
     if args.cmd == "fleet":
         return cmd_fleet(args.repos, args.doc, args.fmt)
+    if args.cmd == "conventions":
+        return cmd_conventions(args.as_json)
     if args.cmd == "install-hook":
         return cmd_install_hook(args.repo, args.force)
     return 2
