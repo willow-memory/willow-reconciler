@@ -131,7 +131,7 @@ class GitLog:
     error: str = ""
 
     @classmethod
-    def load(cls, repo_path: str) -> "GitLog":
+    def load(cls, repo_path: str) -> GitLog:
         """Read the full commit history of `repo_path` once. Never raises on
         a missing/non-git repo — returns `available=False` with `error` set,
         so a caller can report the gap rather than crash: an idea-doc in a
@@ -148,7 +148,7 @@ class GitLog:
                 # error this module was rebuilt to prevent. Evidence must be
                 # reachable from the checkout being reconciled.
                 ["git", "-C", repo_path, "log", f"--format={fmt}"],
-                capture_output=True, text=True, timeout=60,
+                capture_output=True, text=True, timeout=60, check=False,
             )
         except (OSError, subprocess.SubprocessError) as e:
             # `str(e)` here can carry an absolute path or, for a
@@ -188,7 +188,7 @@ class GitLog:
     def _is_git_repo(repo_path: str) -> bool:
         try:
             proc = subprocess.run(["git", "-C", repo_path, "rev-parse", "--git-dir"],
-                                  capture_output=True, text=True, timeout=60)
+                                  capture_output=True, text=True, timeout=60, check=False)
         except (OSError, subprocess.SubprocessError):
             return False
         return proc.returncode == 0
@@ -282,7 +282,7 @@ def changed_paths(repo_path: str) -> dict[str, tuple[str, ...]]:
     try:
         proc = subprocess.run(
             ["git", "-C", repo_path, "log", f"--format={fmt}", "--name-only"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, timeout=60, check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return {}

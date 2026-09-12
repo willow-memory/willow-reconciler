@@ -31,7 +31,7 @@ def real_run():
         pytest.skip("willow-mcp sibling absent; test_corpus.py covers this "
                     "behaviour against the in-repo fixture")
     text = IDEAS_DOC.read_text(encoding="utf-8")
-    items, dropped = parse_doc(text)
+    items, _dropped = parse_doc(text)
     gitlog = GitLog.load(str(FLEET_ROOT / "willow-mcp"))
     verdicts = [classify_item(idea_id(i.num), i.num, i.text, gitlog) for i in items]
     return items, verdicts, gitlog

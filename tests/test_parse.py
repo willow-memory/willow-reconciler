@@ -20,7 +20,7 @@ def test_ignores_indented_numbered_lines():
     """A numbered line nested under something else (indented) is not a
     top-level idea item."""
     text = "1. real item\n    2. nested, not an item\n3. real item two\n"
-    items, dropped = parse_doc(text)
+    items, _dropped = parse_doc(text)
     assert [i.num for i in items] == [1, 3]
 
 

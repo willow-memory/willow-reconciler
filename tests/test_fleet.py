@@ -121,7 +121,7 @@ def test_a_missing_doc_is_a_row_not_an_error(tmp_path):
     missing_row = result["rows"][1]
     assert missing_row["repo"] == "missing-doc"
     assert missing_row["doc_status"] == "missing"
-    assert "doc_error" in missing_row and missing_row["doc_error"]
+    assert missing_row.get("doc_error")
     # never leaks a raw path into the reported error (failure_classes.py contract)
     assert str(missing) not in missing_row["doc_error"]
 

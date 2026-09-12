@@ -12,8 +12,14 @@ worth its cost: **no substring of the input can reach the output.**
 """
 from __future__ import annotations
 
-from reconciler.failure_classes import (FAILURE_CLASSES, FILE_FAILURE_CLASSES, UNKNOWN,
-                                          classify, classify_file, describe)
+from reconciler.failure_classes import (
+    FAILURE_CLASSES,
+    FILE_FAILURE_CLASSES,
+    UNKNOWN,
+    classify,
+    classify_file,
+    describe,
+)
 
 # A representative git fatal message naming an absolute path that reveals the
 # operating user and a sibling (client) repo's name.

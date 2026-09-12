@@ -7,7 +7,6 @@ it, which is also true of the tool itself.
 from __future__ import annotations
 
 import pytest
-
 from fixtures.corpus import DOC_RELPATH, build_corpus
 
 

@@ -9,8 +9,8 @@ everywhere, including on a CI runner with no fleet siblings.
 from __future__ import annotations
 
 import pytest
-
 from fixtures.corpus import DANGLING_ID, EXPECTED, HOLDOUT_RECOVERABLE
+
 from reconciler.classify import INFERRED, LANDED, NOT_STARTED, PARTIAL
 from reconciler.ledger import build_ledger
 from reconciler.validate import hand_tags, holdout_score
@@ -186,6 +186,7 @@ def test_benchmark_separates_independent_from_self_witnessed(corpus, corpus_run)
     touched the pile; item 15's was written by the commit that added its tag.
     Both recover under the hold-out, and only one of them is evidence."""
     from fixtures.corpus import EXPECTED_PROVENANCE
+
     from reconciler.benchmark import benchmark
 
     items, _, gitlog, _ = corpus_run

@@ -171,7 +171,7 @@ def _config_hooks_path(repo_path: Path) -> str | None:
     try:
         proc = subprocess.run(
             ["git", "-C", str(repo_path), "config", "--get", "core.hooksPath"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=30, check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return None

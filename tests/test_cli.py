@@ -3,8 +3,8 @@ import subprocess
 
 import pytest
 
-from reconciler.cli import cmd_id, cmd_install_hook, cmd_verify, run
 from reconciler import cli as climod
+from reconciler.cli import cmd_id, cmd_install_hook, cmd_verify, run
 
 
 @pytest.fixture

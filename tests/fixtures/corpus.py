@@ -17,7 +17,14 @@ import pathlib
 import shutil
 import subprocess
 
-from reconciler.classify import EXPLICIT, INFERRED, LANDED, NONE_KIND, NOT_STARTED, PARTIAL
+from reconciler.classify import (
+    EXPLICIT,
+    INFERRED,
+    LANDED,
+    NONE_KIND,
+    NOT_STARTED,
+    PARTIAL,
+)
 
 DOC_RELPATH = "docs/ideas.md"
 _FIXTURE_DOC = pathlib.Path(__file__).with_name("adversarial_ideas.md")

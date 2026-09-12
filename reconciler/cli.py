@@ -295,14 +295,14 @@ def cmd_benchmark(repo: str, doc: str, fmt: str = "markdown",
         return 0
 
     lines = ["# reconciler benchmark", "", result["headline"], "", result["reading"], "",
-             f"- **independent recovery** (the quotable number): "
+             (f"- **independent recovery** (the quotable number): "
              f"{result['n_recovered_independent']}/{result['n_hand_tagged']} "
-             f"(rate={result['independent_recovery_rate']})",
-             f"- **raw recovery** (NOT a capability number): "
+             f"(rate={result['independent_recovery_rate']})"),
+             (f"- **raw recovery** (NOT a capability number): "
              f"{result['n_recovered']}/{result['n_hand_tagged']} "
-             f"(rate={result['recovery_rate']})",
-             f"- **trailer provenance across the whole history**: "
-             f"{result['trailer_provenance']}", ""]
+             f"(rate={result['recovery_rate']})"),
+             (f"- **trailer provenance across the whole history**: "
+             f"{result['trailer_provenance']}"), ""]
     for d in result["detail"]:
         if not d["recovered"]:
             lines.append(f"  - [MISS] {d['idea_id']}: expected={d['expected']} "
@@ -320,17 +320,17 @@ def _render(ledger: dict, fmt: str) -> str:
     lines = ["# reconciler run", "",
              ledger["headline"], "", ledger["reading"], "",
              f"- **doc**: {ledger['doc']} ({ledger['repo']})",
-             f"- **items parsed**: {ledger['items_parsed']} of {ledger['items_total']} "
-             f"({ledger['dropped']} dropped, unparseable)",
+             (f"- **items parsed**: {ledger['items_parsed']} of {ledger['items_total']} "
+             f"({ledger['dropped']} dropped, unparseable)"),
              f"- **by status**: {ledger['counts_by_status']}",
              f"- **by evidence kind**: {ledger['counts_by_evidence_kind']}"]
     if ledger["duplicate_nums"]:
         lines.append(f"- **duplicate item numbers** (surfaced, not resolved): "
                      f"{ledger['duplicate_nums']}")
     lines += ["", "## items", "",
-             "Each item names the rule that fired (see classify.py's docstring: "
+             ("Each item names the rule that fired (see classify.py's docstring: "
              "1 = explicit legend tag, 2a = Idea-Id trailer, 2b = merged-PR mention, "
-             "3 = abstain) so a verdict is inspectable without reading the source."]
+             "3 = abstain) so a verdict is inspectable without reading the source.")]
     for row in ledger["items"]:
         lines.append(f"- `{row['idea_id']}` **{row['status']}** (rule {row['rule']}, "
                      f"{row['evidence_kind']}): {row['evidence']}")
@@ -338,13 +338,13 @@ def _render(ledger: dict, fmt: str) -> str:
         ec = ledger["validation"]["echo_check"]
         ho = ledger["validation"]["holdout"]
         lines += ["", "## validation", "",
-                  f"**echo check** (trivial — rule 1 reading its own tag back; NOT a "
-                  f"capability number): n={ec['n']}, accuracy={ec['accuracy']}. {ec['note']}",
+                  (f"**echo check** (trivial — rule 1 reading its own tag back; NOT a "
+                  f"capability number): n={ec['n']}, accuracy={ec['accuracy']}. {ec['note']}"),
                   "",
-                  f"**hold-out score** (the real Slice-0 acceptance number — legend tag "
+                  (f"**hold-out score** (the real Slice-0 acceptance number — legend tag "
                   f"stripped, then reclassified with only the inferred/not_started tiers): "
                   f"{ho['n_recovered']}/{ho['n_hand_tagged']} recovered "
-                  f"(recovery_rate={ho['recovery_rate']})."]
+                  f"(recovery_rate={ho['recovery_rate']}).")]
         for d in ho["detail"]:
             mark = "OK" if d["recovered"] else "MISS"
             lines.append(f"  - [{mark}] {d['idea_id']}: expected={d['expected']} "
@@ -394,8 +394,8 @@ def _render_fleet(result: dict) -> str:
     t = result["totals"]
     lines = ["# reconciler fleet", "",
              f"- **doc**: {result['doc']} (checked in every repo listed below)",
-             f"- **repos**: {len(result['rows'])} ({t['repos_ok']} readable, "
-             f"{t['repos_doc_missing']} with `doc: missing`)",
+             (f"- **repos**: {len(result['rows'])} ({t['repos_ok']} readable, "
+             f"{t['repos_doc_missing']} with `doc: missing`)"),
              "",
              "| repo | " + " | ".join(_FLEET_COLUMNS) + " |",
              "|" + "---|" * (len(_FLEET_COLUMNS) + 1)]
