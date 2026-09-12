@@ -4,6 +4,7 @@ import subprocess
 import pytest
 
 from reconciler.cli import cmd_id, cmd_install_hook, cmd_verify, run
+from reconciler import cli as climod
 
 
 @pytest.fixture
@@ -128,3 +129,106 @@ def test_install_hook_on_a_missing_repo_errors_cleanly(tmp_path, capsys):
     rc = cmd_install_hook(repo="does-not-exist", fleet_root=tmp_path)
     assert rc == 2
     assert "error:" in capsys.readouterr().err
+
+
+# --- --repo: a path or a bare name, resolved beside the caller not the ------
+# --- installed package (the packaged-tool-cannot-find-a-repo bug) ----------
+
+def _git_repo_with_one_item(path):
+    (path / "docs").mkdir(parents=True)
+    (path / "docs" / "ideas.md").write_text("1. an idea with no evidence\n")
+    subprocess.run(["git", "init", "-q"], cwd=path, check=True)
+
+
+def test_repo_as_absolute_path_works_from_an_unrelated_cwd(tmp_path, monkeypatch, capsys):
+    repo = tmp_path / "elsewhere" / "myrepo"
+    _git_repo_with_one_item(repo)
+    other_cwd = tmp_path / "unrelated"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+
+    rc = run(repo=str(repo), doc="docs/ideas.md", fmt="json")
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out)["n"] == 1
+
+
+def test_repo_as_relative_path_works_from_an_unrelated_cwd(tmp_path, monkeypatch, capsys):
+    repo = tmp_path / "elsewhere" / "myrepo"
+    _git_repo_with_one_item(repo)
+    other_cwd = tmp_path / "unrelated"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+
+    rc = run(repo="../elsewhere/myrepo", doc="docs/ideas.md", fmt="json")
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out)["n"] == 1
+
+
+def test_bare_name_resolves_beside_callers_checkout_when_package_elsewhere(
+        tmp_path, monkeypatch, capsys):
+    """Simulates the packaged (PyPI) failure mode: the package's OWN checkout
+    (`_fleet_root`) has no useful sibling — from `site-packages` it never
+    would — but the caller's own git checkout does, and that is where a bare
+    name must resolve."""
+    caller_checkout = tmp_path / "caller" / "myproject"
+    caller_checkout.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=caller_checkout, check=True)
+
+    sibling = tmp_path / "caller" / "willow-mcp"
+    _git_repo_with_one_item(sibling)
+
+    lonely_package_root = tmp_path / "site-packages-like"
+    lonely_package_root.mkdir()
+    monkeypatch.setattr(climod, "_fleet_root", lambda: lonely_package_root)
+    monkeypatch.chdir(caller_checkout)
+
+    rc = run(repo="willow-mcp", doc="docs/ideas.md", fmt="json")
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out)["n"] == 1
+
+
+def test_bare_name_resolving_nowhere_names_every_candidate(tmp_path, monkeypatch, capsys):
+    lonely_checkout = tmp_path / "lonely-checkout"
+    lonely_checkout.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=lonely_checkout, check=True)
+    monkeypatch.chdir(lonely_checkout)
+
+    lonely_package_root = tmp_path / "fleet-root-elsewhere"
+    lonely_package_root.mkdir()
+    monkeypatch.setattr(climod, "_fleet_root", lambda: lonely_package_root)
+
+    rc = run(repo="ghost-repo", doc="docs/ideas.md", fmt="json")
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert str(lonely_checkout.parent / "ghost-repo") in err
+    assert str(lonely_package_root / "ghost-repo") in err
+
+
+def test_sibling_of_package_checkout_still_resolves(tmp_path, monkeypatch, capsys):
+    """The pre-existing behaviour (a source checkout with no cwd set up at
+    all) must keep working — this is candidate (3), tried last."""
+    package_root = tmp_path / "fleet"
+    sibling = package_root / "willow-mcp"
+    _git_repo_with_one_item(sibling)
+
+    unrelated_cwd = tmp_path / "somewhere-else-entirely"
+    unrelated_cwd.mkdir()
+    monkeypatch.chdir(unrelated_cwd)
+    monkeypatch.setattr(climod, "_fleet_root", lambda: package_root)
+
+    rc = run(repo="willow-mcp", doc="docs/ideas.md", fmt="json")
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out)["n"] == 1
+
+
+def test_install_hook_accepts_a_path_argument(tmp_path, monkeypatch):
+    repo = tmp_path / "hookrepo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    other_cwd = tmp_path / "elsewhere"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+
+    rc = cmd_install_hook(repo=str(repo))
+    assert rc == 0
+    assert (repo / ".git" / "hooks" / "commit-msg").exists()

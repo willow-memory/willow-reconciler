@@ -10,8 +10,9 @@ have **landed**, **partially landed**, or show **no evidence** of having
 started. The answer comes from a fixed rule stack, never a model call.
 
 - **stdlib-only** — no runtime dependencies (`pytest` is the only extra, for tests).
-- **local-first** — reads a checkout that is a sibling of this package on disk;
-  it will not walk outside the fleet tree.
+- **local-first** — reads a real git checkout on disk, resolved as a path you
+  give it or a bare name found beside your own checkout; it never fetches or
+  clones anything.
 - **deterministic** — every verdict is a regex or exact/whole-word match against
   doc text and git evidence already in hand. No model, so the same inputs always
   produce the same ledger.
@@ -36,11 +37,16 @@ reconciler run --repo willow-mcp --doc docs/ideas.md
 
 Flags (see `reconciler/cli.py`):
 
-- `--repo` (required) — a repo directory that is a **sibling** of
-  willow-reconciler's own checkout (the fleet layout: `willow-mcp`,
-  `corpus-lens`, `willow-reconciler` all live under one parent). Not an
-  arbitrary filesystem path, so a typo cannot walk this read-only tool out of
-  the fleet tree.
+- `--repo` (required) — either a **path** to the repo directory (absolute, or
+  relative to your current directory), used as-is, or a bare **name**,
+  resolved in order (first hit, containing `.git`, wins): a sibling of your
+  own checkout's root, a sibling of your current directory, or a sibling of
+  willow-reconciler's own checkout (the fleet layout — `willow-mcp`,
+  `corpus-lens`, `willow-reconciler` all under one parent — is recommended,
+  not required; it is what still works from a source checkout with nothing
+  else set up). This is what lets a `pip install`ed `reconciler` find a repo
+  at all: run from inside (or beside) the checkout you mean to reconcile, or
+  just pass its path.
 - `--doc` (required) — the doc path, relative to `--repo`'s root.
 - `--format markdown|json` — output shape (default `markdown`).
 - `--validate` — additionally score this run's verdicts against the doc's own
