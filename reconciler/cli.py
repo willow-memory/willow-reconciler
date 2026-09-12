@@ -5,6 +5,7 @@
     reconciler verify --repo willow-mcp --doc docs/ideas.md [--format markdown|json]
     reconciler install-hook --repo willow-mcp [--force]
     reconciler benchmark --repo willow-mcp --doc docs/ideas.md [--format markdown|json]
+    reconciler fleet --repo willow-mcp --repo willow-reconciler [--doc docs/ideas.md] [--format markdown|json]
 
 `run` and `verify` are read-only (`git log` only). `install-hook` is the one
 verb that writes into the target repo, which is why it is a verb and not a
@@ -14,11 +15,25 @@ Read-only, deterministic, stdlib-only — mirrors corpus-lens/corpuslens/cli.py'
 one-verb-per-subcommand shape and its refusal to print a traceback: every
 failure is a clear `error:` line on stderr and a non-zero exit.
 
-`--repo` names a directory SIBLING to this package (the fleet's own layout:
-willow-mcp, corpus-lens, willow-reconciler all live under the same parent —
-see `_fleet_root`), never an arbitrary filesystem path, so a typo can't walk
-this read-only tool outside the fleet tree it was built to read. `--doc` is
-a path relative to that repo's root.
+`--repo` accepts either a PATH (absolute, or relative to the current working
+directory — anything carrying a `/` or `\\`, or already absolute) to a repo
+directory, used as-is, or a bare NAME, resolved in this order, first hit
+wins, each candidate required to contain `.git`:
+
+  1. a sibling of the current working directory's own enclosing git checkout
+     (walk up from cwd to the nearest `.git`, then take that directory's
+     parent);
+  2. a sibling of the cwd itself;
+  3. a sibling of THIS PACKAGE's own checkout (`_fleet_root` below) — the
+     fleet's recommended layout (willow-mcp, corpus-lens, willow-reconciler
+     all under one parent), kept because it is what makes a source checkout
+     work with no cwd set up at all.
+
+A packaged install (from PyPI) has no meaningful package-checkout sibling —
+candidate 3 lands in `site-packages` and never resolves — so (1)/(2) are
+what let `reconciler run --repo willow-mcp ...` work from an arbitrary
+directory once installed. See `_resolve_repo`. `--doc` is a path relative to
+the resolved repo's root.
 """
 from __future__ import annotations
 
@@ -32,6 +47,7 @@ from .benchmark import benchmark
 from .classify import classify_item
 from .emit import VALID_STATUSES, find_items, trailer_block
 from .failure_classes import classify_file
+from .fleet import DOC_OK, build_fleet
 from .gitevidence import GitLog
 from .hooks import install_hooks
 from .ids import idea_id
@@ -44,24 +60,97 @@ def _fleet_root() -> Path:
     """The directory containing this package's own repo (willow-reconciler)
     — e.g. `~/github/willow-memory`. Computed from `__file__`, never from an
     environment variable or a hardcoded username, so the tool works the same
-    on any checkout of the fleet tree."""
+    on any checkout of the fleet tree. From an installed (PyPI) package this
+    lands inside `site-packages` and its sibling is never a real repo — that
+    is exactly why `_resolve_repo` tries the caller's own checkout first."""
     return Path(__file__).resolve().parents[2]
 
 
-def _resolve_repo(repo: str, fleet_root: Path | None = None) -> Path:
-    root = fleet_root or _fleet_root()
-    return (root / repo).resolve()
+def _enclosing_git_checkout(start: Path) -> Path | None:
+    """Walk up from `start` to the nearest directory (inclusive) that
+    contains a `.git` entry — a directory for an ordinary clone, a file for a
+    worktree or submodule, either way `Path.exists()` alone is enough since
+    this never needs to read it. None when no ancestor of `start` is inside a
+    git checkout at all."""
+    current = start.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def _is_path_like(repo: str) -> bool:
+    """True when `--repo` was given a filesystem path rather than a bare name
+    to resolve by convention. Checked for either separator (not just
+    `os.sep`) so a POSIX-style relative path (`../willow-mcp`) reads as a
+    path the same way on every platform this tool's CI runs, per the
+    Windows-path CI lesson: never assume the platform's own separator is the
+    only one a caller might type."""
+    return "/" in repo or "\\" in repo or Path(repo).is_absolute()
+
+
+def _name_candidates(name: str, fleet_root: Path | None) -> list[Path]:
+    """Every directory a bare `--repo <name>` might mean, in resolution
+    order — first one containing `.git` wins (see `_resolve_repo`). Listed in
+    full (not lazily) so a failed resolution can name every candidate it
+    tried, and deduplicated (by resolved path) so a repo laid out exactly per
+    the fleet convention doesn't get the same directory listed three times in
+    that error."""
+    candidates: list[Path] = []
+    cwd = Path.cwd()
+    checkout_root = _enclosing_git_checkout(cwd)
+    if checkout_root is not None:
+        candidates.append(checkout_root.parent / name)
+    candidates.append(cwd.parent / name)
+    candidates.append((fleet_root or _fleet_root()) / name)
+
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for c in candidates:
+        key = c.resolve()
+        if key not in seen:
+            seen.add(key)
+            out.append(c)
+    return out
+
+
+def _resolve_repo(repo: str, fleet_root: Path | None = None) -> tuple[Path | None, list[Path]]:
+    """Resolve `--repo` to a real repo directory (one containing `.git`).
+
+    Returns `(path, candidates)`: `path` is the first candidate that actually
+    contains `.git`, or `None` if none did; `candidates` is every directory
+    that was tried, in order, for the caller to report on failure. See the
+    module docstring for the path-vs-name rule this implements."""
+    if _is_path_like(repo):
+        candidate = Path(repo)
+        if not candidate.is_absolute():
+            candidate = Path.cwd() / candidate
+        if (candidate / ".git").exists():
+            return candidate.resolve(), [candidate]
+        return None, [candidate]
+
+    candidates = _name_candidates(repo, fleet_root)
+    for c in candidates:
+        if (c / ".git").exists():
+            return c.resolve(), candidates
+    return None, candidates
+
+
+def _repo_not_found_error(repo: str, candidates: list[Path]) -> str:
+    tried = "; ".join(str(c) for c in candidates)
+    return (f"error: repo '{repo}' not found — no `.git` at any candidate tried: "
+            f"{tried}. Pass a path to the repo directory, or a bare name that "
+            f"resolves beside your own checkout or willow-reconciler's own.")
 
 
 def _load(repo: str, doc: str, fleet_root: Path | None):
-    """Shared front half of every doc-reading verb: resolve the sibling repo,
-    read the doc, parse it. Returns (repo_path, items, dropped) or an int exit
+    """Shared front half of every doc-reading verb: resolve the repo, read
+    the doc, parse it. Returns (repo_path, items, dropped) or an int exit
     code — so `run`, `id` and `verify` report the same errors in the same
     words, and only one of them owns the wording."""
-    repo_path = _resolve_repo(repo, fleet_root)
-    if not repo_path.is_dir():
-        print(f"error: repo '{repo}' not found at {repo_path} — pass a directory "
-              f"sibling to willow-reconciler's own repo.", file=sys.stderr)
+    repo_path, candidates = _resolve_repo(repo, fleet_root)
+    if repo_path is None:
+        print(_repo_not_found_error(repo, candidates), file=sys.stderr)
         return 2
 
     doc_path = repo_path / doc
@@ -169,10 +258,9 @@ def cmd_verify(repo: str, doc: str, fmt: str = "markdown",
 
 def cmd_install_hook(repo: str, force: bool = False,
                      fleet_root: Path | None = None) -> int:
-    repo_path = _resolve_repo(repo, fleet_root)
-    if not repo_path.is_dir():
-        print(f"error: repo '{repo}' not found at {repo_path} — pass a directory "
-              f"sibling to willow-reconciler's own repo.", file=sys.stderr)
+    repo_path, candidates = _resolve_repo(repo, fleet_root)
+    if repo_path is None:
+        print(_repo_not_found_error(repo, candidates), file=sys.stderr)
         return 2
 
     result = install_hooks(repo_path, force=force)
@@ -262,6 +350,66 @@ def _render(ledger: dict, fmt: str) -> str:
     return "\n".join(lines)
 
 
+def cmd_fleet(repos: list[str], doc: str = "docs/ideas.md", fmt: str = "markdown",
+             fleet_root: Path | None = None) -> int:
+    """One table across many repos. Each `--repo` is resolved exactly as
+    `run`'s is (path or bare name — see the module docstring); a repo that
+    fails to resolve at all still aborts the command the way `run` does
+    (there is no repo to read anything from), but a repo that resolves and
+    simply has no readable doc becomes a `doc_status: "missing"` row rather
+    than aborting the rest of the fleet — see `fleet.py`."""
+    resolved: list[tuple[str, Path]] = []
+    for repo in repos:
+        repo_path, candidates = _resolve_repo(repo, fleet_root)
+        if repo_path is None:
+            print(_repo_not_found_error(repo, candidates), file=sys.stderr)
+            return 2
+        resolved.append((repo, repo_path))
+
+    result = build_fleet(resolved, doc)
+    if fmt == "json":
+        print(json.dumps(result, indent=2))
+        return 0
+    print(_render_fleet(result))
+    return 0
+
+
+_FLEET_COLUMNS = ("items", "dropped", "explicit landed", "explicit partial",
+                  "inferred landed", "inferred partial", "none",
+                  "independent", "raw")
+
+
+def _fleet_row_cells(row: dict) -> tuple[str, ...]:
+    if row["doc_status"] != DOC_OK:
+        return (f"doc: missing ({row['doc_error']})",) + ("—",) * (len(_FLEET_COLUMNS) - 1)
+    return (str(row["items_parsed"]), str(row["dropped"]), str(row["explicit_landed"]),
+            str(row["explicit_partial"]), str(row["inferred_landed"]),
+            str(row["inferred_partial"]), str(row["none"]),
+            str(row["independent_recovery_rate"]), str(row["recovery_rate"]))
+
+
+def _render_fleet(result: dict) -> str:
+    t = result["totals"]
+    lines = ["# reconciler fleet", "",
+             f"- **doc**: {result['doc']} (checked in every repo listed below)",
+             f"- **repos**: {len(result['rows'])} ({t['repos_ok']} readable, "
+             f"{t['repos_doc_missing']} with `doc: missing`)",
+             "",
+             "| repo | " + " | ".join(_FLEET_COLUMNS) + " |",
+             "|" + "---|" * (len(_FLEET_COLUMNS) + 1)]
+    for row in result["rows"]:
+        lines.append(f"| {row['repo']} | " + " | ".join(_fleet_row_cells(row)) + " |")
+    lines.append(
+        f"| **totals (pooled)** | {t['items_parsed']} | {t['dropped']} | "
+        f"{t['explicit_landed']} | {t['explicit_partial']} | {t['inferred_landed']} | "
+        f"{t['inferred_partial']} | {t['none']} | {t['pooled_independent_recovery_rate']} | "
+        f"{t['pooled_recovery_rate']} |")
+    lines += ["", "## reading", ""]
+    for r in result["reading"]:
+        lines += [f"- {r}", ""]
+    return "\n".join(lines).rstrip("\n")
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="reconciler")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -269,7 +417,8 @@ def main(argv=None) -> int:
     r = sub.add_parser("run", help="parse a doc's numbered items and classify each "
                                    "landed/partial/not_started against the repo's own records")
     r.add_argument("--repo", required=True,
-                   help="a repo directory sibling to willow-reconciler's own checkout")
+                   help="a path to the repo, or a bare name resolved beside your "
+                        "checkout or willow-reconciler's own (see module docstring)")
     r.add_argument("--doc", required=True, help="path to the doc, relative to --repo's root")
     r.add_argument("--format", default="markdown", choices=("markdown", "json"), dest="fmt")
     r.add_argument("--validate", action="store_true",
@@ -307,6 +456,14 @@ def main(argv=None) -> int:
     b.add_argument("--doc", required=True)
     b.add_argument("--format", default="markdown", choices=("markdown", "json"), dest="fmt")
 
+    f = sub.add_parser("fleet", help="reconcile the same doc across many repos and pool "
+                                     "the result into one table")
+    f.add_argument("--repo", required=True, action="append", dest="repos",
+                   help="repeatable — a path or bare name, same rule as `run`'s --repo")
+    f.add_argument("--doc", default="docs/ideas.md",
+                   help="path relative to each --repo's root (same for every repo)")
+    f.add_argument("--format", default="markdown", choices=("markdown", "json"), dest="fmt")
+
     args = p.parse_args(argv)
     if args.cmd == "run":
         return run(args.repo, args.doc, args.fmt, args.validate)
@@ -316,6 +473,8 @@ def main(argv=None) -> int:
         return cmd_verify(args.repo, args.doc, args.fmt)
     if args.cmd == "benchmark":
         return cmd_benchmark(args.repo, args.doc, args.fmt)
+    if args.cmd == "fleet":
+        return cmd_fleet(args.repos, args.doc, args.fmt)
     if args.cmd == "install-hook":
         return cmd_install_hook(args.repo, args.force)
     return 2

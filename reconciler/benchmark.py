@@ -37,6 +37,17 @@ SELF_WITNESSED = "self_witnessed"
 INDEPENDENT = "independent"
 UNATTRIBUTED = "unattributed"   # recovered, but the evidence commit is unknown
 
+#: The caveat sentence every renderer of a benchmark result prints alongside
+#: its headline. Module-level (not inlined in `benchmark`) so `reconciler
+#: fleet` can quote it verbatim across many repos' rows without paraphrasing
+#: it — see `fleet.py`.
+READING = ("Quote `independent_recovery_rate`, never `recovery_rate`. The latter "
+           "counts trailers whose author was holding the answer while writing them, "
+           "so it can read 1.0 on a tool that has never recovered anything nobody "
+           "told it. A 0.0 here alongside a high recovery_rate is the expected shape "
+           "for a convention that has been demonstrated but not yet lived in — it is "
+           "not a regression, and the fix for it is time, not code.")
+
 
 def _evidence_sha(evidence: str, gitlog: GitLog) -> str | None:
     """The commit a verdict's evidence points at. `classify` renders the short
@@ -88,18 +99,11 @@ def benchmark(items: list[Item], gitlog: GitLog, repo_path: str, doc: str) -> di
         f"of the pile ({len(self_witnessed)} came from a commit that edited the doc in "
         f"the same act, which demonstrates the pipeline, not recall)."
     )
-    reading = ("Quote `independent_recovery_rate`, never `recovery_rate`. The latter "
-               "counts trailers whose author was holding the answer while writing them, "
-               "so it can read 1.0 on a tool that has never recovered anything nobody "
-               "told it. A 0.0 here alongside a high recovery_rate is the expected shape "
-               "for a convention that has been demonstrated but not yet lived in — it is "
-               "not a regression, and the fix for it is time, not code.")
-
     return {
         "doc": doc,
         "headline": headline,
         "n": n,
-        "reading": reading,
+        "reading": READING,
         "n_hand_tagged": n,
         "n_recovered": len(recovered),
         "n_recovered_independent": len(independent),
