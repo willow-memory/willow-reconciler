@@ -1,5 +1,27 @@
 name: Tests
 
+# The fleet CI floor (fleet plan decision 5). Five legs, one gate:
+#
+#   versions      — derives the Python matrix from pyproject.toml's
+#                   `Programming Language :: Python :: 3.X` classifiers, so a
+#                   supported version is declared once and never typed twice;
+#   test-matrix   — Linux, every classifier minor;
+#   test-windows  — Windows, floor and ceiling minors only: separators, line
+#                   endings, `tempfile`, an executable written by
+#                   `install-hook`, `git log` output through `\r\n` — the
+#                   lessons that only fire there;
+#   lint          — ruff PINNED to an exact version: `ruff check` and
+#                   `ruff format --check`, no config of this repo's own;
+#   test          — the aggregate: `needs:` every leg, runs `if: always()`,
+#                   and FAILS on any result that is not `success`. Skipped and
+#                   cancelled are failures, written out explicitly, because a
+#                   required check that was skipped reads as passing to GitHub.
+#
+# CodeQL (python + actions) runs as GitHub's default setup on this repo — a
+# dynamic workflow, not a file here — so it cannot be `needs:`-ed from this
+# gate; it is a required check of its own. tests/test_ci_floor.py holds the
+# shape of this file to the description above.
+
 on:
   push:
     branches: [main]
@@ -7,12 +29,48 @@ on:
     branches: [main]
 
 jobs:
-  test-matrix:
+  versions:
+    name: Python versions from pyproject classifiers
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      versions: ${{ steps.derive.outputs.versions }}
+      floor_ceiling: ${{ steps.derive.outputs.floor_ceiling }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the classifiers
+        id: derive
+        run: |
+          python - <<'PY'
+          import json, os, re, sys
+
+          # A regex, not tomllib: this script is also run by
+          # tests/test_ci_floor.py on every Python the floor covers, and 3.10
+          # has no tomllib. The classifier shape is fixed, so the regex is
+          # exact.
+          text = open("pyproject.toml", encoding="utf-8").read()
+          minors = sorted({int(m) for m in
+                           re.findall(r'"Programming Language :: Python :: 3\.(\d+)"', text)})
+          if not minors:
+              sys.exit("pyproject.toml declares no `Programming Language :: Python :: 3.X` "
+                       "classifier; the matrix is derived from them, so declare each "
+                       "supported minor there.")
+          versions = [f"3.{m}" for m in minors]
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"versions={json.dumps(versions)}\n")
+              out.write(f"floor_ceiling={json.dumps([versions[0], versions[-1]])}\n")
+          print(f"matrix: {versions}; windows: {[versions[0], versions[-1]]}")
+          PY
+
+  test-matrix:
+    needs: [versions]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ${{ fromJSON(needs.versions.outputs.versions) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -26,14 +84,73 @@ jobs:
       - name: Run tests
         run: python -m pytest tests/ -q
 
+  test-windows:
+    needs: [versions]
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(needs.versions.outputs.floor_ceiling) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: pip install -e ".[test]"
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff (pinned)
+        # An exact pin, never a range: a lint gate that moves on its own
+        # turns a sibling's unrelated push red the day ruff adds a rule.
+        # Bump it deliberately, in a commit that says so.
+        run: pip install ruff==0.16.7
+
+      - name: ruff check
+        run: ruff check .
+
+      - name: ruff format --check
+        run: ruff format --check .
+
   test:
-    needs: [test-matrix]
+    needs: [versions, test-matrix, test-windows, lint]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Assert every matrix leg actually succeeded
-        if: ${{ needs.test-matrix.result != 'success' }}
+      - name: Every leg succeeded — skipped and cancelled are failures
+        env:
+          NEEDS: ${{ toJSON(needs) }}
         run: |
-          echo "::error::test-matrix did not succeed (result: ${{ needs.test-matrix.result }})"
-          exit 1
-      - run: echo "all matrix legs green"
+          python - <<'PY'
+          import json, os, sys
+
+          needs = json.loads(os.environ["NEEDS"])
+          for job, info in sorted(needs.items()):
+              print(f"{job}: {info['result']}")
+          # Explicitly `!= "success"`, not `== "failure"`: a leg that was
+          # skipped (a `needs:` upstream failed, or a path filter excluded it)
+          # or cancelled has not proven anything, and GitHub's own required
+          # checks treat a skipped job as satisfied.
+          bad = {job: info["result"] for job, info in needs.items()
+                 if info["result"] != "success"}
+          if bad:
+              print(f"::error::these legs did not succeed: {bad}")
+              sys.exit(1)
+          print("all legs green")
+          PY

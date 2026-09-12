@@ -2,6 +2,7 @@
 through them in a throwaway repo — a hook that reads correctly and does not
 fire is the only kind of hook bug that matters."""
 
+import os
 import subprocess
 
 import pytest
@@ -56,7 +57,13 @@ def test_install_writes_both_hooks_executable(repo):
     assert result["ok"] is True
     for name in ("prepare-commit-msg", "commit-msg"):
         path = repo / ".git" / "hooks" / name
-        assert path.exists() and path.stat().st_mode & 0o111
+        assert path.exists()
+        if os.name != "nt":
+            # Windows has no execute bit: `st_mode` reports one only for
+            # `.exe`/`.bat`-style names, and Git for Windows runs `.git/hooks/*`
+            # through its own sh regardless. That the hook actually FIRES on
+            # every platform is what the prepare-commit-msg tests below prove.
+            assert path.stat().st_mode & 0o111
         assert _carries_our_marker(path)
 
 

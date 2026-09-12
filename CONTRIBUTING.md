@@ -23,8 +23,13 @@ pip install -e ".[test]"
 python -m pytest tests/ -q
 ```
 
-Requires Python 3.10+. CI runs the suite across 3.10–3.14 and must be green
-before merge.
+Requires Python 3.10+. CI runs the suite on Linux across every Python minor
+`pyproject.toml`'s classifiers declare (the matrix is derived from them, so
+add a classifier to add a version), on Windows at the floor and ceiling of
+that range, and runs `ruff check` and `ruff format --check` at the exact ruff
+version pinned in `.github/workflows/tests.yml`. One aggregate `test` job
+gates all of it and reads a skipped or cancelled leg as a failure. All of it
+must be green before merge.
 
 ## The Idea-Id commit-trailer convention
 

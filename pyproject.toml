@@ -20,6 +20,14 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    # One classifier per supported minor. CI's Python matrix is DERIVED from
+    # these (see .github/workflows/tests.yml, job `versions`), so a version is
+    # declared here once and tested everywhere, never typed twice.
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Environment :: Console",
 ]
 
