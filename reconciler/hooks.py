@@ -184,6 +184,7 @@ def _config_hooks_path(repo_path: Path) -> str | None:
             ["git", "-C", str(repo_path), "config", "--get", "core.hooksPath"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=30,
             check=False,
         )

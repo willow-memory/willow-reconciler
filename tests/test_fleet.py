@@ -17,7 +17,11 @@ from reconciler.ledger import READING as LEDGER_READING
 
 def _git(repo, *args):
     subprocess.run(
-        ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
 
 

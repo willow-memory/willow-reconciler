@@ -10,7 +10,9 @@ DOC = "1. first idea\n2. second idea\n"
 
 
 def _run(cmd, cwd):
-    subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True)
+    subprocess.run(
+        cmd, cwd=cwd, check=True, capture_output=True, text=True, encoding="utf-8"
+    )
 
 
 @pytest.fixture
@@ -22,7 +24,7 @@ def repo_factory(tmp_path):
         _run(["git", "config", "user.email", "test@example.com"], repo)
         _run(["git", "config", "user.name", "Test"], repo)
         for i, msg in enumerate(commit_messages):
-            (repo / f"f{i}.txt").write_text(f"{i}\n")
+            (repo / f"f{i}.txt").write_text(f"{i}\n", encoding="utf-8")
             _run(["git", "add", f"f{i}.txt"], repo)
             _run(["git", "commit", "-q", "-m", msg], repo)
         return repo

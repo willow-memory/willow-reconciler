@@ -11,7 +11,9 @@ from reconciler.hooks import MARKER, install_hooks
 
 
 def _run(cmd, cwd, check=True):
-    return subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True)
+    return subprocess.run(
+        cmd, cwd=cwd, check=check, capture_output=True, text=True, encoding="utf-8"
+    )
 
 
 @pytest.fixture
@@ -25,7 +27,7 @@ def repo(tmp_path):
 
 
 def _commit(repo, name, msg, check=True):
-    (repo / name).write_text(name)
+    (repo / name).write_text(name, encoding="utf-8")
     _run(["git", "add", name], repo)
     return _run(["git", "commit", "-m", msg], repo, check=check)
 
@@ -39,16 +41,16 @@ def _carries_our_marker(path):
     the installer stamps, which is also what lets it tell its own hook from
     somebody else's. A read-and-membership scan, factored out of the tests
     below so it has one name and one plant (see tests/test_scans_fire.py)."""
-    return MARKER in path.read_text()
+    return MARKER in path.read_text(encoding="utf-8")
 
 
 def test_the_marker_check_catches_a_planted_foreign_hook(tmp_path):
     """Planted: a hook somebody else wrote, then the same path stamped the
     way the installer stamps it."""
     hook = tmp_path / "commit-msg"
-    hook.write_text("#!/bin/sh\n# somebody else's hook\n")
+    hook.write_text("#!/bin/sh\n# somebody else's hook\n", encoding="utf-8")
     assert not _carries_our_marker(hook)
-    hook.write_text(f"#!/bin/sh\n{MARKER}\n")
+    hook.write_text(f"#!/bin/sh\n{MARKER}\n", encoding="utf-8")
     assert _carries_our_marker(hook)
 
 
@@ -69,16 +71,16 @@ def test_install_writes_both_hooks_executable(repo):
 
 def test_install_refuses_to_clobber_a_foreign_hook(repo):
     path = repo / ".git" / "hooks" / "commit-msg"
-    path.write_text("#!/bin/sh\n# somebody else's hook\n")
+    path.write_text("#!/bin/sh\n# somebody else's hook\n", encoding="utf-8")
     result = install_hooks(repo)
     assert result["ok"] is False
-    assert path.read_text() == "#!/bin/sh\n# somebody else's hook\n"
+    assert path.read_text(encoding="utf-8") == "#!/bin/sh\n# somebody else's hook\n"
     assert any(r["action"] == "skipped" for r in result["results"])
 
 
 def test_force_replaces_a_foreign_hook(repo):
     path = repo / ".git" / "hooks" / "commit-msg"
-    path.write_text("#!/bin/sh\n# somebody else's hook\n")
+    path.write_text("#!/bin/sh\n# somebody else's hook\n", encoding="utf-8")
     assert install_hooks(repo, force=True)["ok"] is True
     assert _carries_our_marker(path)
 

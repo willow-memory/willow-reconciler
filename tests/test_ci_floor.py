@@ -104,6 +104,7 @@ def _derive_versions(workflow_text: str, pyproject_text: str, workdir: Path) -> 
         env={**os.environ, "GITHUB_OUTPUT": str(output)},
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     if proc.returncode != 0:

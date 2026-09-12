@@ -6,7 +6,9 @@ from reconciler.gitevidence import GitLog
 
 
 def _run(cmd, cwd):
-    subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True)
+    subprocess.run(
+        cmd, cwd=cwd, check=True, capture_output=True, text=True, encoding="utf-8"
+    )
 
 
 @pytest.fixture
@@ -18,7 +20,7 @@ def repo_factory(tmp_path):
         _run(["git", "config", "user.email", "test@example.com"], repo)
         _run(["git", "config", "user.name", "Test"], repo)
         for i, msg in enumerate(commit_messages):
-            (repo / f"f{i}.txt").write_text(f"{i}\n")
+            (repo / f"f{i}.txt").write_text(f"{i}\n", encoding="utf-8")
             _run(["git", "add", f"f{i}.txt"], repo)
             _run(["git", "commit", "-q", "-m", msg], repo)
         return repo
@@ -57,7 +59,7 @@ def test_find_merged_pr_via_a_real_merge_commit(repo_factory):
     """Requires BOTH halves: GitHub's merge subject and two or more parents."""
     repo = repo_factory(["chore: base"])
     _run(["git", "checkout", "-q", "-b", "side"], repo)
-    (repo / "side.txt").write_text("side\n")
+    (repo / "side.txt").write_text("side\n", encoding="utf-8")
     _run(["git", "add", "side.txt"], repo)
     _run(["git", "commit", "-q", "-m", "feat: side work"], repo)
     _run(["git", "checkout", "-q", "-"], repo)
@@ -111,6 +113,7 @@ def test_never_mutates_the_repo(repo_factory):
         cwd=repo,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
     ).stdout
     GitLog.load(str(repo))
@@ -119,6 +122,7 @@ def test_never_mutates_the_repo(repo_factory):
         cwd=repo,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
     ).stdout
     assert before == after == ""
@@ -212,7 +216,7 @@ def test_a_trailer_on_an_unmerged_branch_is_not_evidence(repo_factory):
     rather than from a regex."""
     repo = repo_factory(["chore: base"])
     _run(["git", "checkout", "-q", "-b", "abandoned"], repo)
-    (repo / "x.txt").write_text("x\n")
+    (repo / "x.txt").write_text("x\n", encoding="utf-8")
     _run(["git", "add", "x.txt"], repo)
     _run(
         ["git", "commit", "-q", "-m", "feat: rejected\n\nIdea-Id: willow-ideas-050"],
@@ -229,7 +233,7 @@ def test_a_trailer_merged_into_the_checkout_is_evidence(repo_factory):
     """The other half: once that branch actually merges, it counts."""
     repo = repo_factory(["chore: base"])
     _run(["git", "checkout", "-q", "-b", "side"], repo)
-    (repo / "x.txt").write_text("x\n")
+    (repo / "x.txt").write_text("x\n", encoding="utf-8")
     _run(["git", "add", "x.txt"], repo)
     _run(["git", "commit", "-q", "-m", "feat: real\n\nIdea-Id: willow-ideas-050"], repo)
     _run(["git", "checkout", "-q", "-"], repo)

@@ -151,6 +151,7 @@ class GitLog:
                 ["git", "-C", repo_path, "log", f"--format={fmt}"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=60,
                 check=False,
             )
@@ -203,6 +204,7 @@ class GitLog:
                 ["git", "-C", repo_path, "rev-parse", "--git-dir"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=60,
                 check=False,
             )
@@ -301,6 +303,7 @@ def changed_paths(repo_path: str) -> dict[str, tuple[str, ...]]:
             ["git", "-C", repo_path, "log", f"--format={fmt}", "--name-only"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=60,
             check=False,
         )

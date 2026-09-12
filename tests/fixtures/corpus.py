@@ -69,7 +69,11 @@ EXPECTED_PROVENANCE = {14: "independent", 15: "self_witnessed"}
 
 def _git(repo: pathlib.Path, *args: str) -> None:
     subprocess.run(
-        ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
 
 

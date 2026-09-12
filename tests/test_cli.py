@@ -14,7 +14,8 @@ def tiny_repo(tmp_path):
     (repo / "docs" / "ideas.md").write_text(
         "1. shipped idea — ✅ **shipped**: in `x.py`.\n"
         "2. partial idea — 🟡 **partial**: half done.\n"
-        "3. bare idea with no evidence at all\n"
+        "3. bare idea with no evidence at all\n",
+        encoding="utf-8",
     )
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     return repo
@@ -180,7 +181,9 @@ def test_install_hook_on_a_missing_repo_errors_cleanly(tmp_path, capsys):
 
 def _git_repo_with_one_item(path):
     (path / "docs").mkdir(parents=True)
-    (path / "docs" / "ideas.md").write_text("1. an idea with no evidence\n")
+    (path / "docs" / "ideas.md").write_text(
+        "1. an idea with no evidence\n", encoding="utf-8"
+    )
     subprocess.run(["git", "init", "-q"], cwd=path, check=True)
 
 
