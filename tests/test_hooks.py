@@ -32,13 +32,31 @@ def _last_message(repo):
     return _run(["git", "log", "-1", "--format=%B"], repo).stdout
 
 
+def _carries_our_marker(path):
+    """True if the hook at `path` is one this tool wrote — the `MARKER` line
+    the installer stamps, which is also what lets it tell its own hook from
+    somebody else's. A read-and-membership scan, factored out of the tests
+    below so it has one name and one plant (see tests/test_scans_fire.py)."""
+    return MARKER in path.read_text()
+
+
+def test_the_marker_check_catches_a_planted_foreign_hook(tmp_path):
+    """Planted: a hook somebody else wrote, then the same path stamped the
+    way the installer stamps it."""
+    hook = tmp_path / "commit-msg"
+    hook.write_text("#!/bin/sh\n# somebody else's hook\n")
+    assert not _carries_our_marker(hook)
+    hook.write_text(f"#!/bin/sh\n{MARKER}\n")
+    assert _carries_our_marker(hook)
+
+
 def test_install_writes_both_hooks_executable(repo):
     result = install_hooks(repo)
     assert result["ok"] is True
     for name in ("prepare-commit-msg", "commit-msg"):
         path = repo / ".git" / "hooks" / name
         assert path.exists() and path.stat().st_mode & 0o111
-        assert MARKER in path.read_text()
+        assert _carries_our_marker(path)
 
 
 def test_install_refuses_to_clobber_a_foreign_hook(repo):
@@ -54,7 +72,7 @@ def test_force_replaces_a_foreign_hook(repo):
     path = repo / ".git" / "hooks" / "commit-msg"
     path.write_text("#!/bin/sh\n# somebody else's hook\n")
     assert install_hooks(repo, force=True)["ok"] is True
-    assert MARKER in path.read_text()
+    assert _carries_our_marker(path)
 
 
 def test_reinstalling_over_our_own_hook_is_allowed(repo):
