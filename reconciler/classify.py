@@ -40,6 +40,7 @@ fewer inferred hits, on purpose: under-claiming (abstain to NOT_STARTED)
 beats over-claiming (a false LANDED). See `validate.py` for the honest,
 non-circular way this is now measured.
 """
+
 from __future__ import annotations
 
 import re
@@ -53,7 +54,7 @@ NOT_STARTED = "not_started"
 
 EXPLICIT = "explicit"
 INFERRED = "inferred"
-NONE_KIND = "none"   # not "explicit"/"inferred" evidence — the absence of any
+NONE_KIND = "none"  # not "explicit"/"inferred" evidence — the absence of any
 
 # A legend tag is a tag only at a DEFINED POSITION, and — after the
 # post-write-side audit — only when it NAMES ITS LEGEND KEYWORD.
@@ -105,11 +106,11 @@ RULE_ABSTAIN = "3"
 class Verdict:
     idea_id: str
     num: int
-    status: str            # LANDED | PARTIAL | NOT_STARTED
-    evidence: str           # human-readable — what was found, or that nothing was
-    evidence_kind: str       # EXPLICIT | INFERRED | NONE_KIND
-    rule: str                # which rule fired: "1" | "2a" | "2b" | "3" — see
-                              # this module's docstring for the numbered stack
+    status: str  # LANDED | PARTIAL | NOT_STARTED
+    evidence: str  # human-readable — what was found, or that nothing was
+    evidence_kind: str  # EXPLICIT | INFERRED | NONE_KIND
+    rule: str  # which rule fired: "1" | "2a" | "2b" | "3" — see
+    # this module's docstring for the numbered stack
 
 
 def explicit_tag_span(text: str):
@@ -139,7 +140,9 @@ def _explicit_tag(text: str) -> tuple[str, str] | None:
     return None
 
 
-def _inferred_tier(idea_id: str, text: str, gitlog: GitLog) -> tuple[str, str, str] | None:
+def _inferred_tier(
+    idea_id: str, text: str, gitlog: GitLog
+) -> tuple[str, str, str] | None:
     """Returns (status, evidence_text, rule), or None if no REAL evidence was
     found. `status` comes from the evidence itself (see rule 2a/2b in the
     module docstring) — this function does not hardcode a status, it reports
@@ -152,15 +155,27 @@ def _inferred_tier(idea_id: str, text: str, gitlog: GitLog) -> tuple[str, str, s
     if hit is not None:
         c, status = hit
         assert status in _VALID_STATUSES
-        return status, (f"commit {c.sha[:10]} carries trailer 'Idea-Id: {idea_id}' "
-                        f"(status={status}): {c.subject!r}"), RULE_IDEA_ID_TRAILER
+        return (
+            status,
+            (
+                f"commit {c.sha[:10]} carries trailer 'Idea-Id: {idea_id}' "
+                f"(status={status}): {c.subject!r}"
+            ),
+            RULE_IDEA_ID_TRAILER,
+        )
 
     for m in PR_MENTION_RE.finditer(text):
         pr_num = int(m.group(1))
         c = gitlog.find_merged_pr(pr_num)
         if c is not None:
-            return LANDED, (f"item names PR #{pr_num}; git history shows it merged "
-                            f"in commit {c.sha[:10]}: {c.subject!r}"), RULE_MERGED_PR_MENTION
+            return (
+                LANDED,
+                (
+                    f"item names PR #{pr_num}; git history shows it merged "
+                    f"in commit {c.sha[:10]}: {c.subject!r}"
+                ),
+                RULE_MERGED_PR_MENTION,
+            )
     return None
 
 
@@ -168,20 +183,39 @@ def classify_item(idea_id: str, num: int, text: str, gitlog: GitLog) -> Verdict:
     explicit = _explicit_tag(text)
     if explicit is not None:
         status, evidence = explicit
-        return Verdict(idea_id=idea_id, num=num, status=status,
-                       evidence=evidence, evidence_kind=EXPLICIT,
-                       rule=RULE_EXPLICIT_TAG)
+        return Verdict(
+            idea_id=idea_id,
+            num=num,
+            status=status,
+            evidence=evidence,
+            evidence_kind=EXPLICIT,
+            rule=RULE_EXPLICIT_TAG,
+        )
 
     inferred = _inferred_tier(idea_id, text, gitlog)
     if inferred is not None:
         status, evidence, rule = inferred
-        return Verdict(idea_id=idea_id, num=num, status=status,
-                       evidence=evidence, evidence_kind=INFERRED, rule=rule)
+        return Verdict(
+            idea_id=idea_id,
+            num=num,
+            status=status,
+            evidence=evidence,
+            evidence_kind=INFERRED,
+            rule=rule,
+        )
 
-    reason = ("no evidence found (no legend tag, no Idea-Id trailer, no PR named in "
-              "the item text that git history shows as merged) — this means no "
-              "evidence was located, not that the idea is proven unbuilt")
+    reason = (
+        "no evidence found (no legend tag, no Idea-Id trailer, no PR named in "
+        "the item text that git history shows as merged) — this means no "
+        "evidence was located, not that the idea is proven unbuilt"
+    )
     if not gitlog.available:
         reason += f"; git history was unavailable ({gitlog.error})"
-    return Verdict(idea_id=idea_id, num=num, status=NOT_STARTED,
-                   evidence=reason, evidence_kind=NONE_KIND, rule=RULE_ABSTAIN)
+    return Verdict(
+        idea_id=idea_id,
+        num=num,
+        status=NOT_STARTED,
+        evidence=reason,
+        evidence_kind=NONE_KIND,
+        rule=RULE_ABSTAIN,
+    )

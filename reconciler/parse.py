@@ -9,6 +9,7 @@ never silently absorbed into the wrong item — see `parse_doc`'s `dropped`
 return for the corpus-lens rule this mirrors ("a dropped item is surfaced,
 not silently discarded").
 """
+
 from __future__ import annotations
 
 import re
@@ -25,10 +26,10 @@ _NEAR_MISS_RE = re.compile(r"^(\d+)\.\S")
 
 @dataclass(frozen=True)
 class Item:
-    num: int          # the doc's own local number (may have gaps — retired
-                       # numbers, section breaks — never renumbered here)
-    text: str          # the full line, minus "N. " prefix
-    line_no: int       # 1-indexed line number in the source doc, for audit
+    num: int  # the doc's own local number (may have gaps — retired
+    # numbers, section breaks — never renumbered here)
+    text: str  # the full line, minus "N. " prefix
+    line_no: int  # 1-indexed line number in the source doc, for audit
 
 
 def parse_doc(text: str) -> tuple[list[Item], int]:

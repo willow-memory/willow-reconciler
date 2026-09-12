@@ -8,6 +8,7 @@ width means the id never reflows when the doc's own max grows past a power
 of ten mid-life (an id computed today stays correct after #999 arrives,
 where a "width = len(str(max_num))" scheme would silently reflow every
 existing id)."""
+
 from __future__ import annotations
 
 _WIDTH = 3

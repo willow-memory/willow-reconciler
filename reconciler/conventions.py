@@ -19,6 +19,7 @@ constant, imported, never retyped.
 field REMOVAL or MEANING change, never on an addition — a consumer pinned
 to `/1` must keep reading a `/1` document that has grown a key.
 """
+
 from __future__ import annotations
 
 import json
@@ -103,8 +104,9 @@ def conventions() -> dict:
         "schema": SCHEMA,
         "hidden_types": list(HIDDEN_TYPES),
         "release_cutting_types": list(RELEASE_CUTTING_TYPES),
-        "required_when_release_please_arms_automerge":
-            list(REQUIRED_WHEN_RELEASE_PLEASE_ARMS_AUTOMERGE),
+        "required_when_release_please_arms_automerge": list(
+            REQUIRED_WHEN_RELEASE_PLEASE_ARMS_AUTOMERGE
+        ),
         "required_config_comments": list(REQUIRED_CONFIG_COMMENTS),
         "required_when_pile_exists": list(REQUIRED_WHEN_PILE_EXISTS),
         "contributing_must_name_test_command": CONTRIBUTING_MUST_NAME_TEST_COMMAND,
@@ -124,7 +126,11 @@ def render_markdown(doc: dict) -> str:
     for key, value in doc.items():
         if key in ("schema", "sources"):
             continue
-        shown = ", ".join(f"`{v}`" for v in value) if isinstance(value, list) else f"`{value}`"
+        shown = (
+            ", ".join(f"`{v}`" for v in value)
+            if isinstance(value, list)
+            else f"`{value}`"
+        )
         lines.append(f"- **{key}**: {shown}")
         lines.append(f"  - source: {doc['sources'][key]}")
     return "\n".join(lines)

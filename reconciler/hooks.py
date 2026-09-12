@@ -22,6 +22,7 @@ Neither hook can INVENT a link: the prepare hook fires only when the branch
 name already carries the number, and it never overwrites a trailer the author
 wrote by hand.
 """
+
 from __future__ import annotations
 
 import stat
@@ -30,7 +31,11 @@ from pathlib import Path
 
 MARKER = "# installed by `reconciler install-hook` (willow-reconciler)"
 
-PREPARE_COMMIT_MSG = "#!/bin/sh\n" + MARKER + "\n" + r"""
+PREPARE_COMMIT_MSG = (
+    "#!/bin/sh\n"
+    + MARKER
+    + "\n"
+    + r"""
 # Adds an `Idea-Id` trailer when the branch name names an idea number, e.g.
 #   idea-24  |  ideas-024  |  feature/idea_24-anchor-tags   ->  willow-ideas-024
 # Does nothing when: the message already has a trailer, the branch does not
@@ -86,8 +91,13 @@ if ! git interpret-trailers --in-place --trailer "Idea-Id: $id" "$msg_file" 2>/d
   printf '\nIdea-Id: %s\n' "$id" >> "$msg_file"
 fi
 """
+)
 
-COMMIT_MSG = "#!/bin/sh\n" + MARKER + "\n" + r"""
+COMMIT_MSG = (
+    "#!/bin/sh\n"
+    + MARKER
+    + "\n"
+    + r"""
 # Rejects a malformed `Idea-Id` trailer. The id shape is fixed at
 # `willow-ideas-NNN` (at least 3 digits, zero-padded) by reconciler/ids.py;
 # anything else can never resolve against a doc, and rule 2a would still rank
@@ -140,6 +150,7 @@ if [ "$bad_status" -gt 0 ]; then
   exit 1
 fi
 """
+)
 
 HOOKS = {
     "prepare-commit-msg": PREPARE_COMMIT_MSG,
@@ -171,7 +182,11 @@ def _config_hooks_path(repo_path: Path) -> str | None:
     try:
         proc = subprocess.run(
             ["git", "-C", str(repo_path), "config", "--get", "core.hooksPath"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -187,9 +202,13 @@ def install_hooks(repo_path: Path, force: bool = False) -> dict:
     results: list[dict] = []
     if not (repo_path / ".git").is_dir():
         hdir = repo_path / ".git" / "hooks"
-        return {"ok": False, "hooks_dir": str(hdir), "results": [],
-                "error": f"{repo_path} has no .git directory (not a git repo, or a "
-                         f"worktree/submodule whose .git is a file)"}
+        return {
+            "ok": False,
+            "hooks_dir": str(hdir),
+            "results": [],
+            "error": f"{repo_path} has no .git directory (not a git repo, or a "
+            f"worktree/submodule whose .git is a file)",
+        }
     hdir = hooks_dir(repo_path)
     hdir.mkdir(parents=True, exist_ok=True)
 
@@ -198,9 +217,15 @@ def install_hooks(repo_path: Path, force: bool = False) -> dict:
         if path.exists():
             existing = path.read_text(encoding="utf-8", errors="replace")
             if MARKER not in existing and not force:
-                results.append({"hook": name, "path": str(path), "action": "skipped",
-                                "reason": "a hook this tool did not write is already "
-                                          "installed; re-run with --force to replace it"})
+                results.append(
+                    {
+                        "hook": name,
+                        "path": str(path),
+                        "action": "skipped",
+                        "reason": "a hook this tool did not write is already "
+                        "installed; re-run with --force to replace it",
+                    }
+                )
                 continue
             action = "replaced"
         else:
@@ -216,5 +241,11 @@ def install_hooks(repo_path: Path, force: bool = False) -> dict:
     }
 
 
-__all__ = ["COMMIT_MSG", "HOOKS", "MARKER", "PREPARE_COMMIT_MSG",
-           "hooks_dir", "install_hooks"]
+__all__ = [
+    "COMMIT_MSG",
+    "HOOKS",
+    "MARKER",
+    "PREPARE_COMMIT_MSG",
+    "hooks_dir",
+    "install_hooks",
+]

@@ -15,6 +15,7 @@ never reaches `classify.py`, and cannot move a verdict. That separation is why
 a loose substring match is safe here while the same looseness was removed from
 the inferred tier: over-matching costs an ambiguity error, not a false LANDED.
 """
+
 from __future__ import annotations
 
 from .ids import idea_id
@@ -23,8 +24,9 @@ from .parse import Item
 VALID_STATUSES = ("landed", "partial")
 
 
-def find_items(items: list[Item], num: int | None = None,
-               grep: str | None = None) -> list[Item]:
+def find_items(
+    items: list[Item], num: int | None = None, grep: str | None = None
+) -> list[Item]:
     """Items matching the selector, in document order. `num` is an exact match
     on the doc's own number; `grep` is a case-insensitive substring of the item
     text. Returns every match — resolving a 0- or many-match result is the

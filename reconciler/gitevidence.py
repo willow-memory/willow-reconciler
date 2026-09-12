@@ -19,6 +19,7 @@ replaces them below only asserts LANDED from evidence that resolves to
 something real: an explicit author-written trailer, or a PR number that this
 git history can show was actually merged.
 """
+
 from __future__ import annotations
 
 import re
@@ -27,8 +28,8 @@ from dataclasses import dataclass, field
 
 from .failure_classes import classify as _classify_failure
 
-_SEP = "\x01"        # field separator inside one commit's record
-_END = "\x02"        # record separator between commits
+_SEP = "\x01"  # field separator inside one commit's record
+_END = "\x02"  # record separator between commits
 
 # A `Key: value` line — the shape git itself recognises as a trailer.
 _TRAILER_LINE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9-]*:[ \t]")
@@ -131,7 +132,7 @@ class GitLog:
     error: str = ""
 
     @classmethod
-    def load(cls, repo_path: str) -> "GitLog":
+    def load(cls, repo_path: str) -> GitLog:
         """Read the full commit history of `repo_path` once. Never raises on
         a missing/non-git repo — returns `available=False` with `error` set,
         so a caller can report the gap rather than crash: an idea-doc in a
@@ -148,14 +149,20 @@ class GitLog:
                 # error this module was rebuilt to prevent. Evidence must be
                 # reachable from the checkout being reconciled.
                 ["git", "-C", repo_path, "log", f"--format={fmt}"],
-                capture_output=True, text=True, timeout=60,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=60,
+                check=False,
             )
         except (OSError, subprocess.SubprocessError) as e:
             # `str(e)` here can carry an absolute path or, for a
             # `TimeoutExpired`, the full argv this tool invoked — read it to
             # classify, never store it: `GitLog.error` is spliced into a
             # verdict's reason and emitted (see failure_classes.py).
-            return cls(repo_path=repo_path, available=False, error=_classify_failure(str(e)))
+            return cls(
+                repo_path=repo_path, available=False, error=_classify_failure(str(e))
+            )
         if proc.returncode != 0:
             # A freshly-`git init`ed repo has an unborn HEAD, so `git log`
             # exits non-zero — but an empty history is a legitimate, usable
@@ -169,8 +176,11 @@ class GitLog:
             # (`fatal: cannot change to '/home/<user>/work/<client>/repo'`) —
             # read it to classify, never store it verbatim (see
             # failure_classes.py's module docstring for why).
-            return cls(repo_path=repo_path, available=False,
-                       error=_classify_failure(proc.stderr))
+            return cls(
+                repo_path=repo_path,
+                available=False,
+                error=_classify_failure(proc.stderr),
+            )
         commits = []
         for rec in proc.stdout.split(_END):
             rec = rec.strip("\n")
@@ -180,15 +190,24 @@ class GitLog:
             if len(parts) != 4:
                 continue
             sha, parents, subject, body = parts
-            commits.append(Commit(sha=sha, subject=subject, body=body,
-                                  parents=tuple(parents.split())))
+            commits.append(
+                Commit(
+                    sha=sha, subject=subject, body=body, parents=tuple(parents.split())
+                )
+            )
         return cls(repo_path=repo_path, commits=tuple(commits), available=True)
 
     @staticmethod
     def _is_git_repo(repo_path: str) -> bool:
         try:
-            proc = subprocess.run(["git", "-C", repo_path, "rev-parse", "--git-dir"],
-                                  capture_output=True, text=True, timeout=60)
+            proc = subprocess.run(
+                ["git", "-C", repo_path, "rev-parse", "--git-dir"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=60,
+                check=False,
+            )
         except (OSError, subprocess.SubprocessError):
             return False
         return proc.returncode == 0
@@ -282,7 +301,11 @@ def changed_paths(repo_path: str) -> dict[str, tuple[str, ...]]:
     try:
         proc = subprocess.run(
             ["git", "-C", repo_path, "log", f"--format={fmt}", "--name-only"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=60,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return {}

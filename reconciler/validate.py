@@ -16,6 +16,7 @@ human label the tag used to carry. This measures what the tool can actually
 recover without being handed the answer — which is the whole point of a
 reconciler whose real job is the ~89 items nobody has hand-tagged yet.
 """
+
 from __future__ import annotations
 
 from .classify import Verdict, _explicit_tag, classify_item, explicit_tag_span
@@ -68,7 +69,7 @@ def echo_check(truth: dict[int, str], verdicts: list[Verdict]) -> dict:
         "correct": len(correct),
         "accuracy": (len(correct) / n) if n else None,
         "note": "trivial by construction — rule 1 reads the same tag this truth set "
-                "reads; see holdout_score for the real capability number.",
+        "reads; see holdout_score for the real capability number.",
     }
 
 
@@ -101,14 +102,16 @@ def holdout_score(items: list[Item], gitlog: GitLog) -> dict:
         item = by_num[num]
         stripped = strip_legend_tag(item.text)
         v = classify_item(idea_id(num), num, stripped, gitlog)
-        detail.append({
-            "num": num,
-            "idea_id": v.idea_id,
-            "expected": expected,
-            "got": v.status,
-            "evidence_kind": v.evidence_kind,
-            "recovered": v.status == expected,
-        })
+        detail.append(
+            {
+                "num": num,
+                "idea_id": v.idea_id,
+                "expected": expected,
+                "got": v.status,
+                "evidence_kind": v.evidence_kind,
+                "recovered": v.status == expected,
+            }
+        )
     n = len(detail)
     recovered = sum(1 for d in detail if d["recovered"])
     return {

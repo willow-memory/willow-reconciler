@@ -4,6 +4,7 @@ What the document *says* is held against this repo's own tree in
 `tests/test_fleet_conventions.py`; this file holds the verb to the module:
 the JSON on stdout is the module's data verbatim, the schema is the one
 consumers pin, and every rule carries a source."""
+
 from __future__ import annotations
 
 import json
@@ -37,12 +38,24 @@ def test_the_document_has_the_schema_and_exactly_the_published_keys():
     assert list(doc) == EXPECTED_KEYS
     assert doc["hidden_types"] == ["chore", "ci", "docs", "test"]
     assert doc["release_cutting_types"] == [
-        "build", "deps", "feat", "fix", "perf", "refactor", "security"]
+        "build",
+        "deps",
+        "feat",
+        "fix",
+        "perf",
+        "refactor",
+        "security",
+    ]
     assert not set(doc["hidden_types"]) & set(doc["release_cutting_types"]), (
-        "a type is hidden or it cuts a release; never both")
-    assert doc["required_when_release_please_arms_automerge"] == [".github/workflows/pr-title.yml"]
+        "a type is hidden or it cuts a release; never both"
+    )
+    assert doc["required_when_release_please_arms_automerge"] == [
+        ".github/workflows/pr-title.yml"
+    ]
     assert doc["required_config_comments"] == [
-        "$comment-hidden-rule", "$comment-what-cuts-a-release"]
+        "$comment-hidden-rule",
+        "$comment-what-cuts-a-release",
+    ]
     assert doc["required_when_pile_exists"] == [".github/workflows/trailers.yml"]
     assert doc["contributing_must_name_test_command"] is True
     assert doc["idea_id_trailer"] == "Idea-Id"

@@ -3,6 +3,7 @@
 Builds real git repos (same technique as test_cli.py's `tiny_repo` /
 test_hooks.py's `repo` fixture) rather than mocking `GitLog`, so these tests
 exercise the actual `git log` path a real fleet run would."""
+
 from __future__ import annotations
 
 import json
@@ -15,7 +16,13 @@ from reconciler.ledger import READING as LEDGER_READING
 
 
 def _git(repo, *args):
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
 
 
 def _init(repo):
@@ -51,10 +58,15 @@ def _repo_with_trailer(tmp_path):
     `Idea-Id` trailer written in a commit that never touches the doc."""
     repo = tmp_path / "repo-with-trailer"
     _init(repo)
-    _write_doc(repo, "1. shipped idea — ✅ **shipped**: in `x.py`.\n"
-                     "2. landed via a trailer, no legend tag\n")
+    _write_doc(
+        repo,
+        "1. shipped idea — ✅ **shipped**: in `x.py`.\n"
+        "2. landed via a trailer, no legend tag\n",
+    )
     _commit_all(repo, "chore: the idea pile")
-    _touch_and_commit(repo, "feat: land item 2\n\nIdea-Id: willow-ideas-002", "item2.py")
+    _touch_and_commit(
+        repo, "feat: land item 2\n\nIdea-Id: willow-ideas-002", "item2.py"
+    )
     return repo
 
 
@@ -115,13 +127,15 @@ def test_a_missing_doc_is_a_row_not_an_error(tmp_path):
     ok_repo = _repo_with_trailer(tmp_path)
     missing = _repo_missing_doc(tmp_path)
 
-    result = build_fleet([("ok", ok_repo), ("missing-doc", missing)], doc="docs/ideas.md")
+    result = build_fleet(
+        [("ok", ok_repo), ("missing-doc", missing)], doc="docs/ideas.md"
+    )
 
     assert len(result["rows"]) == 2
     missing_row = result["rows"][1]
     assert missing_row["repo"] == "missing-doc"
     assert missing_row["doc_status"] == "missing"
-    assert "doc_error" in missing_row and missing_row["doc_error"]
+    assert missing_row.get("doc_error")
     # never leaks a raw path into the reported error (failure_classes.py contract)
     assert str(missing) not in missing_row["doc_error"]
 
@@ -190,6 +204,10 @@ def test_pooled_rate_is_over_pooled_counts_not_averaged_per_repo(tmp_path):
     repo = _repo_with_trailer(tmp_path)
     result = build_fleet([("a", repo), ("b", repo)], doc="docs/ideas.md")
     totals = result["totals"]
-    expected = (2 * result["rows"][0]["n_recovered_independent"]) / (
-        2 * result["rows"][0]["n_hand_tagged"]) if result["rows"][0]["n_hand_tagged"] else None
+    expected = (
+        (2 * result["rows"][0]["n_recovered_independent"])
+        / (2 * result["rows"][0]["n_hand_tagged"])
+        if result["rows"][0]["n_hand_tagged"]
+        else None
+    )
     assert totals["pooled_independent_recovery_rate"] == expected

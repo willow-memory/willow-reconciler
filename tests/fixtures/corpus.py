@@ -11,13 +11,21 @@ and this history are put together. It is written by hand from the traps'
 intent, NOT generated from the classifier, so it cannot drift into agreeing
 with a regression the way the original `echo_check` did.
 """
+
 from __future__ import annotations
 
 import pathlib
 import shutil
 import subprocess
 
-from reconciler.classify import EXPLICIT, INFERRED, LANDED, NONE_KIND, NOT_STARTED, PARTIAL
+from reconciler.classify import (
+    EXPLICIT,
+    INFERRED,
+    LANDED,
+    NONE_KIND,
+    NOT_STARTED,
+    PARTIAL,
+)
 
 DOC_RELPATH = "docs/ideas.md"
 _FIXTURE_DOC = pathlib.Path(__file__).with_name("adversarial_ideas.md")
@@ -26,18 +34,18 @@ _FIXTURE_DOC = pathlib.Path(__file__).with_name("adversarial_ideas.md")
 EXPECTED: dict[int, tuple[str, str]] = {
     1: (LANDED, EXPLICIT),
     2: (PARTIAL, EXPLICIT),
-    3: (NOT_STARTED, NONE_KIND),    # joke item naming a real tool
-    4: (NOT_STARTED, NONE_KIND),    # "former #103" is not a PR reference
-    5: (NOT_STARTED, NONE_KIND),    # "(#42)" subject is not a squash merge
-    6: (LANDED, INFERRED),          # real merge commit for PR #77
-    7: (LANDED, INFERRED),          # Idea-Id trailer, merged
-    8: (PARTIAL, INFERRED),         # Idea-Id + Idea-Status: partial
-    9: (NOT_STARTED, NONE_KIND),    # trailer only on an abandoned branch
-    10: (NOT_STARTED, NONE_KIND),   # prose em-dash before a marker
-    11: (NOT_STARTED, NONE_KIND),   # marker mid-prose
-    12: (LANDED, EXPLICIT),         # leading marker, no keyword
-    14: (LANDED, EXPLICIT),         # tagged; also trailered, for the hold-out
-    15: (LANDED, EXPLICIT),         # tagged BY its own trailer commit
+    3: (NOT_STARTED, NONE_KIND),  # joke item naming a real tool
+    4: (NOT_STARTED, NONE_KIND),  # "former #103" is not a PR reference
+    5: (NOT_STARTED, NONE_KIND),  # "(#42)" subject is not a squash merge
+    6: (LANDED, INFERRED),  # real merge commit for PR #77
+    7: (LANDED, INFERRED),  # Idea-Id trailer, merged
+    8: (PARTIAL, INFERRED),  # Idea-Id + Idea-Status: partial
+    9: (NOT_STARTED, NONE_KIND),  # trailer only on an abandoned branch
+    10: (NOT_STARTED, NONE_KIND),  # prose em-dash before a marker
+    11: (NOT_STARTED, NONE_KIND),  # marker mid-prose
+    12: (LANDED, EXPLICIT),  # leading marker, no keyword
+    14: (LANDED, EXPLICIT),  # tagged; also trailered, for the hold-out
+    15: (LANDED, EXPLICIT),  # tagged BY its own trailer commit
 }
 
 # Items whose legend tag, once stripped, IS recoverable from real evidence.
@@ -52,15 +60,21 @@ DANGLING_ID = "willow-ideas-404"
 # by contrast, is written by a commit that never touches the pile.
 SELF_WITNESSED_ITEM = (
     "15. tagged by the very commit that claims it — ✅ **shipped**: so the "
-    "benchmark has a self-witnessed recovery to tell apart from a real one.\n")
+    "benchmark has a self-witnessed recovery to tell apart from a real one.\n"
+)
 
 # num -> provenance of the evidence that recovers it once its tag is stripped.
 EXPECTED_PROVENANCE = {14: "independent", 15: "self_witnessed"}
 
 
 def _git(repo: pathlib.Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), *args], check=True,
-                   capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
 
 
 def _commit(repo: pathlib.Path, filename: str, message: str) -> None:
@@ -91,17 +105,27 @@ def build_corpus(dest: pathlib.Path) -> pathlib.Path:
 
     # Controls for rule 2a.
     _commit(dest, "item7.py", "feat: land item 7\n\nIdea-Id: willow-ideas-007")
-    _commit(dest, "item8.py",
-            "feat: half-land item 8\n\nIdea-Id: willow-ideas-008\nIdea-Status: partial")
+    _commit(
+        dest,
+        "item8.py",
+        "feat: half-land item 8\n\nIdea-Id: willow-ideas-008\nIdea-Status: partial",
+    )
     _commit(dest, "item14.py", "feat: land item 14\n\nIdea-Id: willow-ideas-014")
 
     # The self-witnessed case: one commit both appends the item to the pile and
     # claims its id, so the tag and the key were authored in a single act.
     doc = dest / DOC_RELPATH
-    doc.write_text(doc.read_text(encoding="utf-8") + SELF_WITNESSED_ITEM, encoding="utf-8")
+    doc.write_text(
+        doc.read_text(encoding="utf-8") + SELF_WITNESSED_ITEM, encoding="utf-8"
+    )
     _git(dest, "add", DOC_RELPATH)
-    _git(dest, "commit", "-q", "-m",
-         "feat: land item 15 and tag it\n\nIdea-Id: willow-ideas-015")
+    _git(
+        dest,
+        "commit",
+        "-q",
+        "-m",
+        "feat: land item 15 and tag it\n\nIdea-Id: willow-ideas-015",
+    )
 
     # For `verify`: a trailer naming an item the doc does not contain.
     _commit(dest, "dangling.txt", f"chore: typo'd key\n\nIdea-Id: {DANGLING_ID}")
@@ -128,5 +152,12 @@ def _merge_pr(repo: pathlib.Path, pr_num: int, slug: str) -> None:
     _git(repo, "checkout", "-q", "-b", slug)
     _commit(repo, f"{slug}.py", f"feat: work for {slug}")
     _git(repo, "checkout", "-q", "-")
-    _git(repo, "merge", "--no-ff", "-q", "-m",
-         f"Merge pull request #{pr_num} from fixture/{slug}", slug)
+    _git(
+        repo,
+        "merge",
+        "--no-ff",
+        "-q",
+        "-m",
+        f"Merge pull request #{pr_num} from fixture/{slug}",
+        slug,
+    )

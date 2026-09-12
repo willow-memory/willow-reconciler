@@ -13,6 +13,7 @@ permanent, and reads as the strongest evidence the tool has.
 So: resolve them all against the doc, and report the ones that do not land
 anywhere. Follows `ledger.py`'s result-shape (headline / n / reading).
 """
+
 from __future__ import annotations
 
 from .gitevidence import GitLog
@@ -39,24 +40,32 @@ def verify_trailers(doc: str, repo: str, items: list[Item], gitlog: GitLog) -> d
     covered = sorted({r["idea_id"] for r in resolved})
 
     if not gitlog.available:
-        headline = (f"Could not verify trailers for {doc} ({repo}): git history was "
-                    f"unavailable ({gitlog.error}).")
+        headline = (
+            f"Could not verify trailers for {doc} ({repo}): git history was "
+            f"unavailable ({gitlog.error})."
+        )
     elif n == 0:
-        headline = (f"No Idea-Id trailers found in {repo}'s history. The doc has "
-                    f"{len(known)} item(s) available to reference; nothing to verify "
-                    f"yet, and nothing is wrong — the convention is prospective.")
+        headline = (
+            f"No Idea-Id trailers found in {repo}'s history. The doc has "
+            f"{len(known)} item(s) available to reference; nothing to verify "
+            f"yet, and nothing is wrong — the convention is prospective."
+        )
     else:
-        headline = (f"{n} Idea-Id trailer(s) in {repo}'s history: {len(resolved)} "
-                    f"resolve to an item in {doc} (covering {len(covered)} distinct "
-                    f"item(s)), {len(unresolved)} name an id the doc does not contain.")
+        headline = (
+            f"{n} Idea-Id trailer(s) in {repo}'s history: {len(resolved)} "
+            f"resolve to an item in {doc} (covering {len(covered)} distinct "
+            f"item(s)), {len(unresolved)} name an id the doc does not contain."
+        )
 
-    reading = ("An unresolved trailer is a FALSE JOIN KEY, not a missing one: rule 2a "
-               "asserts LANDED from a trailer ahead of every other inferred signal, and "
-               "nothing else in the rule stack can tell a real id from a dead one. Fix "
-               "the trailer (a later commit may restate it correctly) or the doc — an "
-               "item retired from the doc leaves its trailers dangling. A run with zero "
-               "trailers is not a failure; the convention only starts paying from the "
-               "commit that first writes one.")
+    reading = (
+        "An unresolved trailer is a FALSE JOIN KEY, not a missing one: rule 2a "
+        "asserts LANDED from a trailer ahead of every other inferred signal, and "
+        "nothing else in the rule stack can tell a real id from a dead one. Fix "
+        "the trailer (a later commit may restate it correctly) or the doc — an "
+        "item retired from the doc leaves its trailers dangling. A run with zero "
+        "trailers is not a failure; the convention only starts paying from the "
+        "commit that first writes one."
+    )
 
     return {
         "doc": doc,

@@ -25,6 +25,7 @@ quoted as a capability result, and it stays 0.0 until the convention has been
 lived in rather than demonstrated. That is the expected reading today, and
 saying so plainly is the point of the module.
 """
+
 from __future__ import annotations
 
 from .classify import classify_item
@@ -35,18 +36,20 @@ from .validate import hand_tags, strip_legend_tag
 
 SELF_WITNESSED = "self_witnessed"
 INDEPENDENT = "independent"
-UNATTRIBUTED = "unattributed"   # recovered, but the evidence commit is unknown
+UNATTRIBUTED = "unattributed"  # recovered, but the evidence commit is unknown
 
 #: The caveat sentence every renderer of a benchmark result prints alongside
 #: its headline. Module-level (not inlined in `benchmark`) so `reconciler
 #: fleet` can quote it verbatim across many repos' rows without paraphrasing
 #: it — see `fleet.py`.
-READING = ("Quote `independent_recovery_rate`, never `recovery_rate`. The latter "
-           "counts trailers whose author was holding the answer while writing them, "
-           "so it can read 1.0 on a tool that has never recovered anything nobody "
-           "told it. A 0.0 here alongside a high recovery_rate is the expected shape "
-           "for a convention that has been demonstrated but not yet lived in — it is "
-           "not a regression, and the fix for it is time, not code.")
+READING = (
+    "Quote `independent_recovery_rate`, never `recovery_rate`. The latter "
+    "counts trailers whose author was holding the answer while writing them, "
+    "so it can read 1.0 on a tool that has never recovered anything nobody "
+    "told it. A 0.0 here alongside a high recovery_rate is the expected shape "
+    "for a convention that has been demonstrated but not yet lived in — it is "
+    "not a regression, and the fix for it is time, not code."
+)
 
 
 def _evidence_sha(evidence: str, gitlog: GitLog) -> str | None:

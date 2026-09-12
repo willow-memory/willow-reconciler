@@ -1,6 +1,8 @@
 """The hooks are shell, not Python, so they are tested by actually committing
 through them in a throwaway repo — a hook that reads correctly and does not
 fire is the only kind of hook bug that matters."""
+
+import os
 import subprocess
 
 import pytest
@@ -9,7 +11,9 @@ from reconciler.hooks import MARKER, install_hooks
 
 
 def _run(cmd, cwd, check=True):
-    return subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True)
+    return subprocess.run(
+        cmd, cwd=cwd, check=check, capture_output=True, text=True, encoding="utf-8"
+    )
 
 
 @pytest.fixture
@@ -23,7 +27,7 @@ def repo(tmp_path):
 
 
 def _commit(repo, name, msg, check=True):
-    (repo / name).write_text(name)
+    (repo / name).write_text(name, encoding="utf-8")
     _run(["git", "add", name], repo)
     return _run(["git", "commit", "-m", msg], repo, check=check)
 
@@ -37,16 +41,16 @@ def _carries_our_marker(path):
     the installer stamps, which is also what lets it tell its own hook from
     somebody else's. A read-and-membership scan, factored out of the tests
     below so it has one name and one plant (see tests/test_scans_fire.py)."""
-    return MARKER in path.read_text()
+    return MARKER in path.read_text(encoding="utf-8")
 
 
 def test_the_marker_check_catches_a_planted_foreign_hook(tmp_path):
     """Planted: a hook somebody else wrote, then the same path stamped the
     way the installer stamps it."""
     hook = tmp_path / "commit-msg"
-    hook.write_text("#!/bin/sh\n# somebody else's hook\n")
+    hook.write_text("#!/bin/sh\n# somebody else's hook\n", encoding="utf-8")
     assert not _carries_our_marker(hook)
-    hook.write_text(f"#!/bin/sh\n{MARKER}\n")
+    hook.write_text(f"#!/bin/sh\n{MARKER}\n", encoding="utf-8")
     assert _carries_our_marker(hook)
 
 
@@ -55,22 +59,28 @@ def test_install_writes_both_hooks_executable(repo):
     assert result["ok"] is True
     for name in ("prepare-commit-msg", "commit-msg"):
         path = repo / ".git" / "hooks" / name
-        assert path.exists() and path.stat().st_mode & 0o111
+        assert path.exists()
+        if os.name != "nt":
+            # Windows has no execute bit: `st_mode` reports one only for
+            # `.exe`/`.bat`-style names, and Git for Windows runs `.git/hooks/*`
+            # through its own sh regardless. That the hook actually FIRES on
+            # every platform is what the prepare-commit-msg tests below prove.
+            assert path.stat().st_mode & 0o111
         assert _carries_our_marker(path)
 
 
 def test_install_refuses_to_clobber_a_foreign_hook(repo):
     path = repo / ".git" / "hooks" / "commit-msg"
-    path.write_text("#!/bin/sh\n# somebody else's hook\n")
+    path.write_text("#!/bin/sh\n# somebody else's hook\n", encoding="utf-8")
     result = install_hooks(repo)
     assert result["ok"] is False
-    assert path.read_text() == "#!/bin/sh\n# somebody else's hook\n"
+    assert path.read_text(encoding="utf-8") == "#!/bin/sh\n# somebody else's hook\n"
     assert any(r["action"] == "skipped" for r in result["results"])
 
 
 def test_force_replaces_a_foreign_hook(repo):
     path = repo / ".git" / "hooks" / "commit-msg"
-    path.write_text("#!/bin/sh\n# somebody else's hook\n")
+    path.write_text("#!/bin/sh\n# somebody else's hook\n", encoding="utf-8")
     assert install_hooks(repo, force=True)["ok"] is True
     assert _carries_our_marker(path)
 
@@ -89,6 +99,7 @@ def test_non_git_directory_errors_rather_than_writing(tmp_path):
 
 
 # --- prepare-commit-msg behaviour ---------------------------------------
+
 
 def test_branch_naming_an_idea_gets_a_zero_padded_trailer(repo):
     install_hooks(repo)
@@ -135,6 +146,7 @@ def test_the_trailer_joins_the_existing_trailer_block(repo):
 
 # --- commit-msg validation ----------------------------------------------
 
+
 def test_malformed_trailer_is_rejected_and_no_commit_is_made(repo):
     install_hooks(repo)
     _run(["git", "checkout", "-qb", "main-work"], repo)
@@ -150,9 +162,12 @@ def test_malformed_status_is_rejected(repo):
     install_hooks(repo)
     _run(["git", "checkout", "-qb", "main-work"], repo)
     _commit(repo, "a.txt", "chore: first")
-    proc = _commit(repo, "b.txt",
-                   "feat: y\n\nIdea-Id: willow-ideas-001\nIdea-Status: mostly",
-                   check=False)
+    proc = _commit(
+        repo,
+        "b.txt",
+        "feat: y\n\nIdea-Id: willow-ideas-001\nIdea-Status: mostly",
+        check=False,
+    )
     assert proc.returncode == 1
     assert "landed" in proc.stderr
 
@@ -165,6 +180,7 @@ def test_a_well_formed_trailer_passes_validation(repo):
 
 
 # --- post-write-side audit regressions ------------------------------------
+
 
 def test_a_branch_naming_two_ideas_gets_no_trailer(repo):
     """Finding #3: the old greedy sed took the LAST number, so this branch
@@ -224,13 +240,16 @@ def test_prose_discussing_the_convention_is_not_rejected(repo):
     a claim, here as everywhere else."""
     install_hooks(repo)
     _run(["git", "checkout", "-qb", "docs-work"], repo)
-    proc = _commit(repo, "a.txt",
-                   "docs: explain the convention\n\n"
-                   "Alongside them sit the controls — a resolving trailer, an\n"
-                   "Idea-Status: partial — because a precision fix that simply\n"
-                   "disables a rule should fail too.\n\n"
-                   "Co-Authored-By: Someone <s@example.com>",
-                   check=False)
+    proc = _commit(
+        repo,
+        "a.txt",
+        "docs: explain the convention\n\n"
+        "Alongside them sit the controls — a resolving trailer, an\n"
+        "Idea-Status: partial — because a precision fix that simply\n"
+        "disables a rule should fail too.\n\n"
+        "Co-Authored-By: Someone <s@example.com>",
+        check=False,
+    )
     assert proc.returncode == 0, proc.stderr
 
 
@@ -238,9 +257,12 @@ def test_a_malformed_trailer_in_the_real_trailer_block_is_still_rejected(repo):
     install_hooks(repo)
     _run(["git", "checkout", "-qb", "real-work"], repo)
     _commit(repo, "a.txt", "chore: first")
-    proc = _commit(repo, "b.txt",
-                   "feat: y\n\nsome prose.\n\nIdea-Id: willow-ideas-7\n\n"
-                   "Co-Authored-By: Someone <s@example.com>",
-                   check=False)
+    proc = _commit(
+        repo,
+        "b.txt",
+        "feat: y\n\nsome prose.\n\nIdea-Id: willow-ideas-7\n\n"
+        "Co-Authored-By: Someone <s@example.com>",
+        check=False,
+    )
     assert proc.returncode == 1
     assert "malformed Idea-Id trailer" in proc.stderr

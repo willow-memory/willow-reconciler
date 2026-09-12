@@ -10,7 +10,9 @@ DOC = "1. first idea\n2. second idea\n"
 
 
 def _run(cmd, cwd):
-    subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True)
+    subprocess.run(
+        cmd, cwd=cwd, check=True, capture_output=True, text=True, encoding="utf-8"
+    )
 
 
 @pytest.fixture
@@ -22,10 +24,11 @@ def repo_factory(tmp_path):
         _run(["git", "config", "user.email", "test@example.com"], repo)
         _run(["git", "config", "user.name", "Test"], repo)
         for i, msg in enumerate(commit_messages):
-            (repo / f"f{i}.txt").write_text(f"{i}\n")
+            (repo / f"f{i}.txt").write_text(f"{i}\n", encoding="utf-8")
             _run(["git", "add", f"f{i}.txt"], repo)
             _run(["git", "commit", "-q", "-m", msg], repo)
         return repo
+
     return make
 
 
@@ -60,23 +63,32 @@ def test_a_trailer_naming_a_missing_item_fails(repo_factory):
 
 
 def test_partial_status_is_carried_through(repo_factory):
-    result = _verify(repo_factory(
-        ["feat: half\n\nIdea-Id: willow-ideas-002\nIdea-Status: partial"]))
+    result = _verify(
+        repo_factory(["feat: half\n\nIdea-Id: willow-ideas-002\nIdea-Status: partial"])
+    )
     assert result["resolved"][0]["status"] == "partial"
 
 
 def test_distinct_items_covered_deduplicates_repeat_trailers(repo_factory):
-    result = _verify(repo_factory([
-        "feat: a\n\nIdea-Id: willow-ideas-001",
-        "feat: b\n\nIdea-Id: willow-ideas-001",
-    ]))
+    result = _verify(
+        repo_factory(
+            [
+                "feat: a\n\nIdea-Id: willow-ideas-001",
+                "feat: b\n\nIdea-Id: willow-ideas-001",
+            ]
+        )
+    )
     assert result["n_resolved"] == 2
     assert result["distinct_items_covered"] == ["willow-ideas-001"]
 
 
 def test_unavailable_git_is_reported_not_passed(tmp_path):
     items, _ = parse_doc(DOC)
-    result = verify_trailers("docs/ideas.md", "repo", items,
-                             GitLog(repo_path=str(tmp_path), available=False, error="nope"))
+    result = verify_trailers(
+        "docs/ideas.md",
+        "repo",
+        items,
+        GitLog(repo_path=str(tmp_path), available=False, error="nope"),
+    )
     assert result["ok"] is False
     assert "unavailable" in result["headline"]

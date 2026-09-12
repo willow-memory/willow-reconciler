@@ -6,11 +6,12 @@ against them first — both audits so far found bugs a fixture like this would
 have caught before they shipped, and unlike the willow-mcp checks these run
 everywhere, including on a CI runner with no fleet siblings.
 """
+
 from __future__ import annotations
 
 import pytest
-
 from fixtures.corpus import DANGLING_ID, EXPECTED, HOLDOUT_RECOVERABLE
+
 from reconciler.classify import INFERRED, LANDED, NOT_STARTED, PARTIAL
 from reconciler.ledger import build_ledger
 from reconciler.validate import hand_tags, holdout_score
@@ -27,6 +28,7 @@ def _by_num(verdicts):
 
 # --- the precision guard -------------------------------------------------
 
+
 def test_no_item_is_ever_falsely_landed(corpus_run):
     """THE invariant. Over-claiming is the cardinal error: every LANDED or
     PARTIAL in this corpus must be one the fixture says is real. A regression
@@ -36,7 +38,8 @@ def test_no_item_is_ever_falsely_landed(corpus_run):
         expected_status, _ = EXPECTED[num]
         if v.status in (LANDED, PARTIAL):
             assert expected_status == v.status, (
-                f"item {num} claimed {v.status} on: {v.evidence}")
+                f"item {num} claimed {v.status} on: {v.evidence}"
+            )
 
 
 @pytest.mark.parametrize("num", sorted(EXPECTED))
@@ -47,6 +50,7 @@ def test_each_item_classifies_as_the_fixture_says(corpus_run, num):
 
 
 # --- the individual traps, named so a failure says which one broke -------
+
 
 def test_a_joke_item_naming_a_real_tool_is_not_landed(corpus_run):
     """~0/11 precision before the first audit removed token matching."""
@@ -92,6 +96,7 @@ def test_partial_is_data_driven_from_the_commit(corpus_run):
 
 # --- parse-level hygiene, surfaced rather than silently absorbed ---------
 
+
 def test_a_malformed_numbered_line_is_dropped_and_counted(corpus_run):
     _, _, _, dropped = corpus_run
     assert dropped == 1
@@ -105,12 +110,14 @@ def test_a_gap_in_numbering_is_preserved(corpus_run):
 
 def test_a_duplicate_item_number_is_surfaced(corpus_run):
     items, verdicts, _, dropped = corpus_run
-    ledger = build_ledger("docs/ideas.md", "corpus", len(items) + dropped, dropped,
-                          verdicts)
+    ledger = build_ledger(
+        "docs/ideas.md", "corpus", len(items) + dropped, dropped, verdicts
+    )
     assert ledger["duplicate_nums"] == [11]
 
 
 # --- verify --------------------------------------------------------------
+
 
 def test_verify_catches_the_dangling_trailer(corpus, corpus_run):
     items, _, gitlog, _ = corpus_run
@@ -123,8 +130,11 @@ def test_verify_resolves_the_real_trailers(corpus_run):
     items, _, gitlog, _ = corpus_run
     result = verify_trailers("docs/ideas.md", "corpus", items, gitlog)
     assert set(result["distinct_items_covered"]) == {
-        "willow-ideas-007", "willow-ideas-008",
-        "willow-ideas-014", "willow-ideas-015"}
+        "willow-ideas-007",
+        "willow-ideas-008",
+        "willow-ideas-014",
+        "willow-ideas-015",
+    }
 
 
 def test_verify_does_not_see_the_abandoned_branchs_trailer(corpus_run):
@@ -137,6 +147,7 @@ def test_verify_does_not_see_the_abandoned_branchs_trailer(corpus_run):
 
 
 # --- the hold-out, on a corpus where it can actually move ----------------
+
 
 def test_holdout_recovers_exactly_what_real_evidence_supports(corpus_run):
     """The willow-mcp hold-out can only ever show 0/22, which proves the metric
@@ -175,17 +186,20 @@ def test_every_inferred_verdict_traces_to_a_resolvable_signal(corpus_run):
     _, verdicts, _, _ = corpus_run
     for v in verdicts:
         if v.evidence_kind == INFERRED:
-            assert ("trailer" in v.evidence or "git history shows it merged" in v.evidence), (
-                f"item {v.num} inferred from unrecognised evidence: {v.evidence}")
+            assert (
+                "trailer" in v.evidence or "git history shows it merged" in v.evidence
+            ), f"item {v.num} inferred from unrecognised evidence: {v.evidence}"
 
 
 # --- the capability benchmark (item 25) -----------------------------------
+
 
 def test_benchmark_separates_independent_from_self_witnessed(corpus, corpus_run):
     """The whole point: item 14's trailer was written by a commit that never
     touched the pile; item 15's was written by the commit that added its tag.
     Both recover under the hold-out, and only one of them is evidence."""
     from fixtures.corpus import EXPECTED_PROVENANCE
+
     from reconciler.benchmark import benchmark
 
     items, _, gitlog, _ = corpus_run

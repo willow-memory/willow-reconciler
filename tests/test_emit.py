@@ -26,7 +26,9 @@ def test_landed_is_the_default_and_writes_no_status_line():
 
 
 def test_partial_adds_a_status_trailer():
-    assert trailer_block(7, "partial") == "Idea-Id: willow-ideas-007\nIdea-Status: partial"
+    assert (
+        trailer_block(7, "partial") == "Idea-Id: willow-ideas-007\nIdea-Status: partial"
+    )
 
 
 def test_unknown_status_is_refused():

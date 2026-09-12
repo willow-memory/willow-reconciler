@@ -12,6 +12,7 @@ Every scan is planted in this same file: a helper that reads a tree and
 reports on it is shown to report on a tree built to violate it (see
 `tests/test_scans_fire.py` for the rule that requires this).
 """
+
 from __future__ import annotations
 
 import json
@@ -78,8 +79,14 @@ def _names_test_command(contributing_text: str) -> bool:
 def test_pr_title_guard_is_present_wherever_automerge_is_armed():
     assert _arms_automerge(REPO_ROOT), (
         f"{RELEASE_PLEASE} is expected to arm auto-merge; if that changed on purpose "
-        "the fleet convention needs to know")
-    assert _missing_when_armed(REPO_ROOT, RULES["required_when_release_please_arms_automerge"]) == []
+        "the fleet convention needs to know"
+    )
+    assert (
+        _missing_when_armed(
+            REPO_ROOT, RULES["required_when_release_please_arms_automerge"]
+        )
+        == []
+    )
 
 
 def test_the_configs_hidden_set_equals_the_published_set():
@@ -100,17 +107,21 @@ def test_contributing_names_the_test_command():
 
 def test_trailers_workflow_is_present_because_a_pile_exists():
     assert (REPO_ROOT / PILE).exists(), "this repo keeps its pile at docs/ideas.md"
-    assert _missing_when_pile_exists(REPO_ROOT, RULES["required_when_pile_exists"]) == []
+    assert (
+        _missing_when_pile_exists(REPO_ROOT, RULES["required_when_pile_exists"]) == []
+    )
 
 
 # ── the plants ──────────────────────────────────────────────────────────────
 
 
-def _tree(tmp_path: Path, label: str, *, arms: bool, files: tuple[str, ...] = ()) -> Path:
+def _tree(
+    tmp_path: Path, label: str, *, arms: bool, files: tuple[str, ...] = ()
+) -> Path:
     root = tmp_path / label
     (root / ".github" / "workflows").mkdir(parents=True)
     body = "jobs:\n  release-please:\n    steps:\n      - run: |\n"
-    body += f"          {ARMS_AUTOMERGE} \"$pr\"\n" if arms else "          gh pr list\n"
+    body += f'          {ARMS_AUTOMERGE} "$pr"\n' if arms else "          gh pr list\n"
     (root / RELEASE_PLEASE).write_text(body, encoding="utf-8")
     for f in files:
         (root / f).parent.mkdir(parents=True, exist_ok=True)
@@ -123,28 +134,44 @@ def test_the_armed_tree_check_fires_on_a_planted_tree_missing_the_guard(tmp_path
     required files — the state every repo in the fleet was in before Wave 2."""
     required = RULES["required_when_release_please_arms_automerge"]
     assert _missing_when_armed(_tree(tmp_path, "bare", arms=True), required) == required
-    assert _missing_when_armed(
-        _tree(tmp_path, "guarded", arms=True, files=tuple(required)), required) == []
+    assert (
+        _missing_when_armed(
+            _tree(tmp_path, "guarded", arms=True, files=tuple(required)), required
+        )
+        == []
+    )
     assert _missing_when_armed(_tree(tmp_path, "manual", arms=False), required) == []
 
 
 def test_the_hidden_set_check_catches_a_planted_config_that_unhides_ci():
     """Planted: a fixture config un-hiding `ci` (jeles v0.4.1) and dropping
     the reasoning block — both must be reported against the published set."""
-    planted = json.dumps({"packages": {".": {"changelog-sections": [
-        {"type": "feat", "section": "Added"},
-        {"type": "docs", "section": "Docs", "hidden": True},
-        {"type": "test", "section": "Tests", "hidden": True},
-        {"type": "ci", "section": "CI"},
-        {"type": "chore", "section": "Chores", "hidden": True},
-    ], "$comment-what-cuts-a-release": "kept"}}})
+    planted = json.dumps(
+        {
+            "packages": {
+                ".": {
+                    "changelog-sections": [
+                        {"type": "feat", "section": "Added"},
+                        {"type": "docs", "section": "Docs", "hidden": True},
+                        {"type": "test", "section": "Tests", "hidden": True},
+                        {"type": "ci", "section": "CI"},
+                        {"type": "chore", "section": "Chores", "hidden": True},
+                    ],
+                    "$comment-what-cuts-a-release": "kept",
+                }
+            }
+        }
+    )
     assert _config_hidden_types(planted) == {"chore", "docs", "test"}
     assert _config_hidden_types(planted) != set(RULES["hidden_types"])
     assert _config_missing_comments(planted, RULES["required_config_comments"]) == [
-        "$comment-hidden-rule"]
+        "$comment-hidden-rule"
+    ]
 
 
-def test_the_pile_check_fires_on_a_planted_tree_with_a_pile_and_no_verify_gate(tmp_path):
+def test_the_pile_check_fires_on_a_planted_tree_with_a_pile_and_no_verify_gate(
+    tmp_path,
+):
     """Planted: a repo that keeps a numbered pile but never runs `reconciler
     verify` in CI — the shape in which a dangling Idea-Id is never caught."""
     required = RULES["required_when_pile_exists"]
@@ -152,7 +179,9 @@ def test_the_pile_check_fires_on_a_planted_tree_with_a_pile_and_no_verify_gate(t
     assert _missing_when_pile_exists(with_pile, required) == required
     gated = _tree(tmp_path, "gated", arms=False, files=(PILE, *required))
     assert _missing_when_pile_exists(gated, required) == []
-    assert _missing_when_pile_exists(_tree(tmp_path, "nopile", arms=False), required) == []
+    assert (
+        _missing_when_pile_exists(_tree(tmp_path, "nopile", arms=False), required) == []
+    )
 
 
 def test_the_contributing_check_catches_a_planted_contributing_without_the_command():

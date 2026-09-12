@@ -16,6 +16,7 @@ because a reader can look at ONE number without opening `counts_by_status`;
 the headline sentence itself must carry the split now, and every per-item
 row already carries `evidence_kind` alongside `status` for the same reason.
 """
+
 from __future__ import annotations
 
 from .classify import EXPLICIT, INFERRED, LANDED, NOT_STARTED, PARTIAL, Verdict
@@ -24,17 +25,20 @@ from .classify import EXPLICIT, INFERRED, LANDED, NOT_STARTED, PARTIAL, Verdict
 #: headline. Module-level (not inlined in `build_ledger`) so `reconciler
 #: fleet` can quote it verbatim across many repos' rows without paraphrasing
 #: it — see `fleet.py`.
-READING = ("NEVER read 'landed' as one pooled figure — explicit and inferred landed "
-           "counts are kept apart on purpose (an explicit tag is the doc author's own "
-           "word; an inferred hit is this tool's own git-log resolution, weaker and "
-           "reported as such). 'not_started' means 'no evidence found', not 'proven "
-           "unbuilt'. See each item's evidence_kind: explicit outranks inferred, which "
-           "outranks none (nothing located). See `--validate`'s hold-out score for what "
-           "the inferred tier can actually recover without being handed a tag.")
+READING = (
+    "NEVER read 'landed' as one pooled figure — explicit and inferred landed "
+    "counts are kept apart on purpose (an explicit tag is the doc author's own "
+    "word; an inferred hit is this tool's own git-log resolution, weaker and "
+    "reported as such). 'not_started' means 'no evidence found', not 'proven "
+    "unbuilt'. See each item's evidence_kind: explicit outranks inferred, which "
+    "outranks none (nothing located). See `--validate`'s hold-out score for what "
+    "the inferred tier can actually recover without being handed a tag."
+)
 
 
-def build_ledger(doc: str, repo: str, items_total: int, dropped: int,
-                 verdicts: list[Verdict]) -> dict:
+def build_ledger(
+    doc: str, repo: str, items_total: int, dropped: int, verdicts: list[Verdict]
+) -> dict:
     by_status = {LANDED: 0, PARTIAL: 0, NOT_STARTED: 0}
     by_status_and_kind: dict[tuple[str, str], int] = {}
     for v in verdicts:
@@ -76,7 +80,9 @@ def build_ledger(doc: str, repo: str, items_total: int, dropped: int,
         "duplicate_nums": duplicates,
         "counts_by_status": by_status,
         "counts_by_evidence_kind": _by_evidence_kind(verdicts),
-        "counts_by_status_and_kind": {f"{s}/{k}": v for (s, k), v in by_status_and_kind.items()},
+        "counts_by_status_and_kind": {
+            f"{s}/{k}": v for (s, k), v in by_status_and_kind.items()
+        },
         "items": [
             {
                 "idea_id": v.idea_id,
