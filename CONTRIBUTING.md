@@ -35,6 +35,15 @@ join key the reconciler reads. Emit it when a commit lands an idea. See
 [CONVENTION.md](CONVENTION.md) for the full rule and what counts as landing
 evidence.
 
+## Fleet conventions
+
+`tests/test_fleet_conventions.py` holds this repo's release and CI wiring to
+the fleet's convention set — which commit types release-please hides, which
+workflows and config comments must exist, that this file names the test
+command above. The rules are not restated there: `reconciler conventions
+--json` publishes them from `reconciler/conventions.py`, their one home, and
+the test reads that. To change a rule, change it there, with its source.
+
 ## Practical bits
 
 - PRs use the closeout template (Bite / What was done / Evidence /
