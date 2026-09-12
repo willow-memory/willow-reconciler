@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Conventional Commits](https://www.conventionalcommits.org/) and this file is
 maintained by [release-please](https://github.com/googleapis/release-please).
 
+## [0.6.0](https://github.com/willow-memory/willow-reconciler/compare/v0.5.0...v0.6.0) (2026-09-12)
+
+
+### Added
+
+* **cli:** reconciler conventions --json, the fleet's rule set from one home ([649a894](https://github.com/willow-memory/willow-reconciler/commit/649a894381dc000258b060facc003ccd912f0b73))
+* **cli:** reconciler conventions --json; pr-title guard; the meta-scan ([d534944](https://github.com/willow-memory/willow-reconciler/commit/d5349444211aec0606a333ef494c7d05646a5ddc))
+
 ## [0.5.0](https://github.com/willow-memory/willow-reconciler/compare/v0.4.0...v0.5.0) (2026-09-12)
 
 
